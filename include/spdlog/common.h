@@ -15,6 +15,7 @@
 #include <type_traits>
 #include <functional>
 #include <cstdio>
+#include <variant>
 
 #ifdef SPDLOG_USE_STD_FORMAT
 #    include <string_view>
@@ -318,6 +319,13 @@ struct file_event_handlers
         , after_close{nullptr}
     {}
 };
+
+using FieldValue = std::variant<spdlog::string_view_t, int, long>; //TODO
+struct Field {
+    spdlog::string_view_t name;
+    FieldValue            value;
+};
+constexpr auto NO_FIELDS = std::array<Field,0>();
 
 namespace details {
 // make_unique support for pre c++14
