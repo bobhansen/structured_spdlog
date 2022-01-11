@@ -7,12 +7,26 @@
 #    include <spdlog/details/log_msg_buffer.h>
 #endif
 
+#include <iostream>
+
 namespace spdlog {
 namespace details {
 
 SPDLOG_INLINE log_msg_buffer::log_msg_buffer(const log_msg &orig_msg)
     : log_msg{orig_msg}
 {
+#ifndef SPDLOG_NO_STRUCTURED_SPDLOG
+    // Start with struct copies so that objects stay nicely aligned, but strings
+    //   can be packed in at the end
+    buffer.append(reinterpret_cast<const char*>(field_data), reinterpret_cast<const char*>(field_data + field_data_count));
+    for (size_t i=0; i < field_data_count; i++) {
+        buffer.append(field_data[i].name);
+        auto string_view_p = std::get_if<string_view_t>(&field_data[i].value);
+        if (string_view_p) {
+            buffer.append(string_view_p->begin(), string_view_p->end());
+        }
+    }
+#endif
     buffer.append(logger_name.begin(), logger_name.end());
     buffer.append(payload.begin(), payload.end());
     update_string_views();
@@ -21,6 +35,18 @@ SPDLOG_INLINE log_msg_buffer::log_msg_buffer(const log_msg &orig_msg)
 SPDLOG_INLINE log_msg_buffer::log_msg_buffer(const log_msg_buffer &other)
     : log_msg{other}
 {
+#ifndef SPDLOG_NO_STRUCTURED_SPDLOG
+    // Start with struct copies so that objects stay nicely aligned, but strings
+    //   can be packed in at the end
+    buffer.append(reinterpret_cast<const char*>(field_data), reinterpret_cast<const char*>(field_data + field_data_count));
+    for (size_t i=0; i < field_data_count; i++) {
+        buffer.append(field_data[i].name);
+        auto string_view_p = std::get_if<string_view_t>(&field_data[i].value);
+        if (string_view_p) {
+            buffer.append(string_view_p->begin(), string_view_p->end());
+        }
+    }
+#endif
     buffer.append(logger_name.begin(), logger_name.end());
     buffer.append(payload.begin(), payload.end());
     update_string_views();
@@ -28,6 +54,7 @@ SPDLOG_INLINE log_msg_buffer::log_msg_buffer(const log_msg_buffer &other)
 
 SPDLOG_INLINE log_msg_buffer::log_msg_buffer(log_msg_buffer &&other) SPDLOG_NOEXCEPT : log_msg{other}, buffer{std::move(other.buffer)}
 {
+    std::cout << "this_count=" << field_data_count << " other_count=" << other.field_data_count << std::endl;
     update_string_views();
 }
 
@@ -44,14 +71,32 @@ SPDLOG_INLINE log_msg_buffer &log_msg_buffer::operator=(log_msg_buffer &&other) 
 {
     log_msg::operator=(other);
     buffer = std::move(other.buffer);
+    if (field_data_count != other.field_data_count) {
+        abort();
+    }
     update_string_views();
     return *this;
 }
 
 SPDLOG_INLINE void log_msg_buffer::update_string_views()
 {
-    logger_name = string_view_t{buffer.data(), logger_name.size()};
-    payload = string_view_t{buffer.data() + logger_name.size(), payload.size()};
+#ifndef SPDLOG_NO_STRUCTURED_SPDLOG
+    field_data = reinterpret_cast<Field *>(buffer.data());
+    size_t offset = sizeof(Field) * field_data_count;
+    for (size_t i=0; i < field_data_count; i++) {
+        field_data[i].name = string_view_t{buffer.data() + offset, field_data[i].name.size()};
+        offset += field_data[i].name.size();
+        auto string_view_p = std::get_if<string_view_t>(&field_data[i].value);
+        if (string_view_p) {
+            field_data[i].value = FieldValue(string_view_t{buffer.data() + offset, string_view_p->size()});
+            offset += string_view_p->size();
+        }
+    }
+#endif
+    logger_name = string_view_t{buffer.data() + offset, logger_name.size()};
+    offset += logger_name.size();
+    payload = string_view_t{buffer.data() + offset, payload.size()};
+    offset += payload.size();
 }
 
 } // namespace details
