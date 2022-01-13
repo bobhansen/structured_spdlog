@@ -320,7 +320,7 @@ struct file_event_handlers
     {}
 };
 
-using FieldValue = std::variant<spdlog::string_view_t, int, long>; //TODO
+using FieldValue = std::variant<spdlog::string_view_t, int, double>; //TODO
 struct Field {
     spdlog::string_view_t name;
     FieldValue            value;
