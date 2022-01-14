@@ -19,27 +19,41 @@
 
 namespace spdlog {
 
+constexpr char ISO8601_FLAGS[] = "%Y-%m-%dT%H:%M:%S.%f%z";
+
+enum class json_field_type {NUMERIC, STRING};
+namespace details {
+    void escape_to_end(spdlog::memory_buf_t &dest, size_t start_offset);
+    bool pattern_needs_escaping(string_view_t pattern);
+
+    class pattern_field {
+    public:
+        pattern_field(const std::string &name, const std::string &pattern, json_field_type field_type, pattern_time_type pattern_time_type_);
+        pattern_field(const std::string &name, formatter* formatter, json_field_type field_type, bool output_needs_escaping);
+
+        pattern_field(const pattern_field &other) = delete;
+        pattern_field &operator=(const pattern_field &other) = delete;
+
+        void format(const details::log_msg &msg, memory_buf_t &dest);
+
+        std::unique_ptr<pattern_field> clone();
+    private:
+        std::string value_prefix_; // {"name":}
+        std::unique_ptr<formatter> formatter_;
+        json_field_type field_type_;
+        bool output_needs_escaping_;
+    };
+} // namespace details
+
 class SPDLOG_API json_formatter final : public formatter
 {
 public:
+
     // Default construction
     explicit json_formatter(pattern_time_type time_type = pattern_time_type::local, std::string eol = spdlog::details::os::default_eol);
+    json_formatter &add_field(std::string field_name, std::string pattern, json_field_type field_type = json_field_type::STRING);
+    json_formatter &add_default_fields();
 
-    // To support cloning; note that it takes default time_type and eol
-    explicit json_formatter(
-        std::string escaped_time_field_name,
-        std::string escaped_message_field_name,
-        std::string escaped_source_loc_field_name,
-        std::string escaped_level_field_name,
-        std::string escaped_thread_id_field_name
-        );
-
-    // Set field name to "" to not emit the field
-    json_formatter & set_time_field(string_view_t time_field_name, pattern_time_type);
-    json_formatter & set_message_field(string_view_t message_field_name);
-    json_formatter & set_source_loc_field(string_view_t source_loc_field_name);
-    json_formatter & set_level_field(string_view_t level_field_name);
-    json_formatter & set_thread_id_field(string_view_t thread_id_field_name);
 
     json_formatter(const json_formatter &other) = delete;
     json_formatter &operator=(const json_formatter &other) = delete;
@@ -48,21 +62,14 @@ public:
     void format(const details::log_msg &msg, memory_buf_t &dest) override;
 
 private:
-    void compile_pattern();
+    void format_data_fields(const Field * fields, size_t field_count, spdlog::memory_buf_t &dest);
 
     pattern_time_type pattern_time_type_;
-    std::string escaped_time_field_name_;
-    std::string escaped_message_field_name_;
-    std::string escaped_source_loc_field_name_;
-    std::string escaped_level_field_name_;
-    std::string escaped_thread_id_field_name_;
+    std::string eol_;
 
-    spdlog::pattern_formatter internal_formatter_;
+    std::vector<std::unique_ptr<details::pattern_field>> fields_;
 };
 
-namespace details {
-    void escape_to_end(spdlog::memory_buf_t &dest, size_t start_offset);
-} // namespace details
 
 } // namespace spdlog
 

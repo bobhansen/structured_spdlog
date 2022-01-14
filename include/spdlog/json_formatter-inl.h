@@ -47,6 +47,10 @@ constexpr uint8_t extra_chars_lookup[256] = {
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 0xFx
 };
 
+// TODO: make a version that can take a list of [start,end] ranges; we can then
+//    write the whole line to the dest buffer and do one pass of escaping: count,
+//    realloc, escape
+
 void escape_to_end(spdlog::memory_buf_t &dest, size_t start_offset)
 {
    // Check to see if we have any characters that must be escaped
@@ -136,167 +140,186 @@ void escape_to_end(spdlog::memory_buf_t &dest, size_t start_offset)
    assert(dest_p == src_p);
 }
 
-class escaped_message_flag : public spdlog::custom_flag_formatter
+SPDLOG_INLINE bool pattern_needs_escaping(string_view_t pattern)
 {
-public:
-    void format(const spdlog::details::log_msg &msg, const std::tm &, spdlog::memory_buf_t &dest) override
-    {
-        size_t start_offset = dest.size();
-        fmt_helper::append_string_view(msg.payload, dest);
+    // Look for any % pattern that isn't in our whitelist of known-doesn't-need-escaping patterns
+    // Anything that can only emit printable ASCII is OK.
+
+    constexpr char KNOWN_CLEAN_PATTERNS[] = "LtplLaAbBcCYDxmdHIMSefFprRTXzE%#oiuO";
+
+    for (size_t i=0; i < pattern.size(); i++) {
+        // Check for % flags
+        uint8_t c = static_cast<uint8_t>(pattern[i]);
+        if (c == '%' && i < pattern.size() - 1) {
+            i++;
+            c = static_cast<uint8_t>(pattern[i]);
+
+            // TODO: make this a binary search
+            bool flag_char_is_clean = false;
+            for (auto clean: KNOWN_CLEAN_PATTERNS) {
+                if (clean == c) {
+                    flag_char_is_clean = true;
+                    break;
+                }
+            }
+            if (!flag_char_is_clean) {
+                return true;
+            }
+        }
+
+        // Check for json-escaped character in pattern
+        if (extra_chars_lookup[c] != 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+SPDLOG_INLINE pattern_field::pattern_field(const std::string &name, const std::string &pattern, json_field_type field_type, pattern_time_type pattern_time_type_) :
+    formatter_(std::make_unique<pattern_formatter>(pattern, pattern_time_type_, "")),
+    field_type_(field_type)
+{
+    // TODO - make this all one pattern {"name": "%v", }; since we know the prefix and suffix length,
+    //    we can do one call to format(), then escape just the questionable data
+    memory_buf_t value_prefix;
+    value_prefix.push_back('"');
+    fmt_helper::append_string_view(name, value_prefix);
+    escape_to_end(value_prefix, 1);
+    value_prefix.push_back('"');
+    value_prefix.push_back(':');
+    value_prefix_ = to_string(value_prefix);
+
+    output_needs_escaping_ = pattern_needs_escaping(pattern);
+}
+
+SPDLOG_INLINE pattern_field::pattern_field(const std::string &value_prefix, formatter* formatter, json_field_type field_type, bool output_needs_escaping) :
+    value_prefix_(value_prefix), formatter_(std::move(formatter->clone())), field_type_(field_type), output_needs_escaping_(output_needs_escaping)
+{
+}
+
+SPDLOG_INLINE std::unique_ptr<pattern_field> pattern_field::clone()
+{
+    return std::make_unique<pattern_field>(value_prefix_, formatter_.get(), field_type_, output_needs_escaping_);
+}
+
+SPDLOG_INLINE void pattern_field::format(const details::log_msg &msg, memory_buf_t &dest)
+{
+    fmt_helper::append_string_view(value_prefix_, dest);
+    if (field_type_ == json_field_type::STRING) {
+        dest.push_back('"');
+    }
+    size_t start_offset = dest.size();
+    formatter_->format(msg, dest);
+    if (output_needs_escaping_) {
         escape_to_end(dest, start_offset);
     }
-
-    std::unique_ptr<custom_flag_formatter> clone() const override
-    {
-        return spdlog::details::make_unique<escaped_message_flag>();
+    if (field_type_ == json_field_type::STRING) {
+        fmt_helper::append_string_view("\", ", dest);
+    } else {
+        fmt_helper::append_string_view(", ", dest);
     }
-};
+}
 
-class field_data_flag : public spdlog::custom_flag_formatter
-{
-public:
-    void format(const spdlog::details::log_msg &msg, const std::tm &, spdlog::memory_buf_t &dest) override
-    {
-        if (msg.field_data_count > 0 && dest.size() > 0 && dest[dest.size()-1] != '{') {
-            dest.push_back(',');
-            dest.push_back(' ');
-        }
-
-        // TODO: should we keep a hash table of field names->escaped field names?
-        // If the same fields keep cropping up and have to be escaped again and again it could have
-        //   a small but noticeable impact on performance
-        for (size_t i=0; i < msg.field_data_count; i++) {
-            if (i > 0) {
-                dest.push_back(',');
-                dest.push_back(' ');
-            }
-            auto &field = msg.field_data[i];
-            dest.push_back('"');
-            size_t offset = dest.size();
-            details::fmt_helper::append_string_view(field.name, dest);
-            escape_to_end(dest, offset);
-            dest.push_back('"');
-            dest.push_back(':');
-
-            switch(field.value.index()) {
-                case 0:
-                    dest.push_back('"');
-                    offset = dest.size();
-                    details::fmt_helper::append_string_view(std::get<spdlog::string_view_t>(field.value), dest);
-                    escape_to_end(dest, offset);
-                    dest.push_back('"');
-                    break;
-                case 1:
-                    fmt_helper::append_int(std::get<int>(field.value), dest);
-                    break;
-                case 2:
-                    //TODO: optimize this and get rid of allocations
-                    details::fmt_helper::append_string_view(std::to_string(std::get<double>(field.value)), dest);
-                    break;
-            }
-        }
-    }
-
-    std::unique_ptr<custom_flag_formatter> clone() const override
-    {
-        return spdlog::details::make_unique<field_data_flag>();
-    }
-};
 } // namespace details
 
 
-SPDLOG_INLINE json_formatter::json_formatter(
-    pattern_time_type time_type, std::string eol)
-    : escaped_time_field_name_("ts")
-    , escaped_message_field_name_("msg")
-    , escaped_source_loc_field_name_("source")
-    , escaped_level_field_name_("level")
-    , escaped_thread_id_field_name_("thread_id")
-    , internal_formatter_("", time_type, eol)
+SPDLOG_INLINE json_formatter::json_formatter(pattern_time_type time_type, std::string eol) :
+    pattern_time_type_(time_type),
+    eol_(eol)
 {
-    internal_formatter_.add_flag<details::escaped_message_flag>('V');
-    internal_formatter_.add_flag<details::field_data_flag>('~');
-    compile_pattern();
 }
 
-SPDLOG_INLINE json_formatter::json_formatter(
-    std::string escaped_time_field_name,
-    std::string escaped_message_field_name,
-    std::string escaped_source_loc_field_name,
-    std::string escaped_level_field_name,
-    std::string escaped_thread_id_field_name
-    )
-    : escaped_time_field_name_(escaped_time_field_name)
-    , escaped_message_field_name_(escaped_message_field_name)
-    , escaped_source_loc_field_name_(escaped_source_loc_field_name)
-    , escaped_level_field_name_(escaped_level_field_name)
-    , escaped_thread_id_field_name_(escaped_thread_id_field_name)
-    , internal_formatter_("")
+SPDLOG_INLINE json_formatter& json_formatter::add_default_fields()
 {
-    internal_formatter_.add_flag<details::escaped_message_flag>('V');
-    internal_formatter_.add_flag<details::field_data_flag>('~');
-    compile_pattern();
+    return add_field("time", ISO8601_FLAGS).add_field("level", "%l").
+        add_field("msg", "%v", json_field_type::STRING).add_field("src_loc", "%@");
 }
+
+SPDLOG_INLINE json_formatter &json_formatter::add_field(std::string field_name, std::string pattern, json_field_type field_type)
+{
+    fields_.emplace_back(
+        std::make_unique<details::pattern_field>(field_name, pattern, field_type, pattern_time_type_)
+    );
+    return *this;
+}
+
 
 SPDLOG_INLINE std::unique_ptr<formatter> json_formatter::clone() const
 {
-    // time_type and eol aren't exposed; clone and overwrite the clone's formatter
-    // TODO: be able to set the eol_ and time_format_ when we clone
-    return std::make_unique<json_formatter>(
-        escaped_time_field_name_, escaped_message_field_name_, escaped_source_loc_field_name_, escaped_level_field_name_, escaped_thread_id_field_name_);
+    auto result = std::make_unique<json_formatter>(pattern_time_type_, eol_);
+    for (auto &field: fields_) {
+        result->fields_.emplace_back(std::move(field->clone()));
+    }
+    return result;
 }
 
-SPDLOG_INLINE void json_formatter::compile_pattern()
-{
+// SPDLOG_INLINE void json_formatter::compile_pattern()
+// {
     // Having enumerated fields is a losing battle; we should just have field->pattern, and escape any pattern that isn't
     //     known-good as a post-process.  We need hooks into the pattern formatter to post-process the outputs or walk
     //     each field and append-then-escape
 
-    // TODO: support custom flag formatters
+// }
 
-    memory_buf_t buffer;
-    buffer.push_back('{');
-    if (!escaped_time_field_name_.empty()) {
-        buffer.push_back('"');
-        details::fmt_helper::append_string_view(escaped_time_field_name_, buffer);
-        details::fmt_helper::append_string_view("\":\"%Y-%m-%dT%H:%M:%S.%f%z\", ", buffer);  // don't escape; all values are OK
-    }
-    if (!escaped_message_field_name_.empty()) {
-        buffer.push_back('"');
-        details::fmt_helper::append_string_view(escaped_message_field_name_, buffer);
-        details::fmt_helper::append_string_view("\":\"%V\", ", buffer);  // %V --> %v with escaping
-    }
-    if (!escaped_source_loc_field_name_.empty()) {
-        buffer.push_back('"');
-        details::fmt_helper::append_string_view(escaped_source_loc_field_name_, buffer);
-        details::fmt_helper::append_string_view("\":\"%@\", ", buffer);  // TODO: escape source filenames; they can have unicode
-    }
-    if (!escaped_level_field_name_.empty()) {
-        buffer.push_back('"');
-        details::fmt_helper::append_string_view(escaped_level_field_name_, buffer);
-        details::fmt_helper::append_string_view("\":\"%l\", ", buffer);  // don't escape; all values are OK
-    }
-    if (!escaped_thread_id_field_name_.empty()) {
-        buffer.push_back('"');
-        details::fmt_helper::append_string_view(escaped_thread_id_field_name_, buffer);
-        details::fmt_helper::append_string_view("\":%t, ", buffer);  // don't escape; integer
-    }
+SPDLOG_INLINE void json_formatter::format_data_fields(const Field * fields, size_t field_count, spdlog::memory_buf_t &dest)
+{
+    // TODO: should we keep a hash table of field names->escaped field names?
+    // If the same fields keep cropping up and have to be escaped again and again it could have
+    //   a small but noticeable impact on performance
+    for (size_t i=0; i < field_count; i++) {
+        auto &field = fields[i];
+        dest.push_back('"');
+        size_t offset = dest.size();
+        details::fmt_helper::append_string_view(field.name, dest);
+        details::escape_to_end(dest, offset);
+        dest.push_back('"');
+        dest.push_back(':');
 
-    // Strip trailing space if it's there
-    if (buffer[buffer.size() -1] == ' ') {
-        buffer.resize(buffer.size() -1);
+        switch(field.value.index()) {
+            case 0:
+                dest.push_back('"');
+                offset = dest.size();
+                details::fmt_helper::append_string_view(std::get<spdlog::string_view_t>(field.value), dest);
+                details::escape_to_end(dest, offset);
+                dest.push_back('"');
+                break;
+            case 1:
+                details::fmt_helper::append_int(std::get<int>(field.value), dest);
+                break;
+            case 2:
+                //TODO: optimize this and get rid of allocations
+                details::fmt_helper::append_string_view(std::to_string(std::get<double>(field.value)), dest);
+                break;
+        }
+
+        dest.push_back(',');
+        dest.push_back(' ');
     }
-    if (buffer[buffer.size() -1] == ',') {
-        buffer.resize(buffer.size() -1);
-    }
-    // %~ for field data and closing brace
-    details::fmt_helper::append_string_view("%~}", buffer);
-    internal_formatter_.set_pattern(to_string(buffer));
 }
+
 
 SPDLOG_INLINE void json_formatter::format(const details::log_msg &msg, memory_buf_t &dest)
 {
-    internal_formatter_.format(msg, dest);
+    // TODO: support custom flag formatters
+    // TODO: all safe fields can be compiled into one pattern formatter
+
+    memory_buf_t buffer;
+    dest.push_back('{');
+
+    for (auto &field_ptr: fields_) {
+        field_ptr->format(msg, dest);
+    }
+    format_data_fields(msg.field_data, msg.field_data_count, dest);
+
+    // Strip trailing space if it's there
+    if (dest[dest.size() -1] == ' ') {
+        dest.resize(dest.size() -1);
+    }
+    if (dest[dest.size() -1] == ',') {
+        dest.resize(dest.size() -1);
+    }
+    dest.push_back('}');
+    details::fmt_helper::append_string_view(eol_, dest);
 }
 
 } // namespace spdlog
