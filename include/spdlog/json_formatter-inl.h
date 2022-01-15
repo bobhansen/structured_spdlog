@@ -11,6 +11,7 @@
 #include <spdlog/details/log_msg.h>
 #include <spdlog/fmt/fmt.h>
 #include <spdlog/formatter.h>
+#include <spdlog/structured_spdlog.h>
 
 #include <chrono>
 #include <ctime>
@@ -176,7 +177,7 @@ SPDLOG_INLINE bool pattern_needs_escaping(string_view_t pattern)
 }
 
 SPDLOG_INLINE pattern_field::pattern_field(const std::string &name, const std::string &pattern, json_field_type field_type, pattern_time_type pattern_time_type_) :
-    formatter_(std::make_unique<pattern_formatter>(pattern, pattern_time_type_, "")),
+    formatter_(details::make_unique<pattern_formatter>(pattern, pattern_time_type_, "")),
     field_type_(field_type)
 {
     // TODO - make this all one pattern {"name": "%v", }; since we know the prefix and suffix length,
@@ -199,7 +200,7 @@ SPDLOG_INLINE pattern_field::pattern_field(const std::string &value_prefix, form
 
 SPDLOG_INLINE std::unique_ptr<pattern_field> pattern_field::clone()
 {
-    return std::make_unique<pattern_field>(value_prefix_, formatter_.get(), field_type_, output_needs_escaping_);
+    return make_unique<pattern_field>(value_prefix_, formatter_.get(), field_type_, output_needs_escaping_);
 }
 
 SPDLOG_INLINE void pattern_field::format(const details::log_msg &msg, memory_buf_t &dest)
@@ -238,7 +239,7 @@ SPDLOG_INLINE json_formatter& json_formatter::add_default_fields()
 SPDLOG_INLINE json_formatter &json_formatter::add_field(std::string field_name, std::string pattern, json_field_type field_type)
 {
     fields_.emplace_back(
-        std::make_unique<details::pattern_field>(field_name, pattern, field_type, pattern_time_type_)
+        details::make_unique<details::pattern_field>(field_name, pattern, field_type, pattern_time_type_)
     );
     return *this;
 }
@@ -246,20 +247,35 @@ SPDLOG_INLINE json_formatter &json_formatter::add_field(std::string field_name, 
 
 SPDLOG_INLINE std::unique_ptr<formatter> json_formatter::clone() const
 {
-    auto result = std::make_unique<json_formatter>(pattern_time_type_, eol_);
+    auto result = details::make_unique<json_formatter>(pattern_time_type_, eol_);
     for (auto &field: fields_) {
         result->fields_.emplace_back(std::move(field->clone()));
     }
     return result;
 }
 
-// SPDLOG_INLINE void json_formatter::compile_pattern()
-// {
-    // Having enumerated fields is a losing battle; we should just have field->pattern, and escape any pattern that isn't
-    //     known-good as a post-process.  We need hooks into the pattern formatter to post-process the outputs or walk
-    //     each field and append-then-escape
-
-// }
+SPDLOG_INLINE bool is_numeric(FieldValueType type)
+{
+    switch(type) {
+        case FieldValueType::STRING_VIEW: return false;
+        case FieldValueType::SHORT: return true;
+        case FieldValueType::USHORT:  return true;
+        case FieldValueType::INT: return true;
+        case FieldValueType::UINT: return true;
+        case FieldValueType::LONG: return true;
+        case FieldValueType::ULONG: return true;
+        case FieldValueType::LONGLONG: return true;
+        case FieldValueType::ULONGLONG: return true;
+        case FieldValueType::BOOL: return true; // in JSON, it is
+        case FieldValueType::CHAR: return false;
+        case FieldValueType::UCHAR: return true;
+        case FieldValueType::WCHAR: return false;
+        case FieldValueType::FLOAT: return true;
+        case FieldValueType::DOUBLE: return true;
+        case FieldValueType::LONGDOUBLE: return true;
+    }
+    abort();  // we should never get here
+}
 
 SPDLOG_INLINE void json_formatter::format_data_fields(const Field * fields, size_t field_count, spdlog::memory_buf_t &dest)
 {
@@ -275,21 +291,15 @@ SPDLOG_INLINE void json_formatter::format_data_fields(const Field * fields, size
         dest.push_back('"');
         dest.push_back(':');
 
-        switch(field.value.index()) {
-            case 0:
+        bool numeric = is_numeric(field.value_type);
+        if (!numeric) {
                 dest.push_back('"');
-                offset = dest.size();
-                details::fmt_helper::append_string_view(std::get<spdlog::string_view_t>(field.value), dest);
-                details::escape_to_end(dest, offset);
+        }
+        size_t start_offset = dest.size();
+        details::append_value(field, dest);
+        details::escape_to_end(dest, start_offset);
+        if (!numeric) {
                 dest.push_back('"');
-                break;
-            case 1:
-                details::fmt_helper::append_int(std::get<int>(field.value), dest);
-                break;
-            case 2:
-                //TODO: optimize this and get rid of allocations
-                details::fmt_helper::append_string_view(std::to_string(std::get<double>(field.value)), dest);
-                break;
         }
 
         dest.push_back(',');

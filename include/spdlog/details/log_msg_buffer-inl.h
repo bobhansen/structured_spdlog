@@ -21,9 +21,8 @@ SPDLOG_INLINE log_msg_buffer::log_msg_buffer(const log_msg &orig_msg)
     buffer.append(reinterpret_cast<const char*>(field_data), reinterpret_cast<const char*>(field_data + field_data_count));
     for (size_t i=0; i < field_data_count; i++) {
         buffer.append(field_data[i].name);
-        auto string_view_p = std::get_if<string_view_t>(&field_data[i].value);
-        if (string_view_p) {
-            buffer.append(string_view_p->begin(), string_view_p->end());
+        if (field_data[i].value_type == FieldValueType::STRING_VIEW) {
+            buffer.append(field_data[i].string_view_.begin(), field_data[i].string_view_.end());
         }
     }
 #endif
@@ -41,9 +40,8 @@ SPDLOG_INLINE log_msg_buffer::log_msg_buffer(const log_msg_buffer &other)
     buffer.append(reinterpret_cast<const char*>(field_data), reinterpret_cast<const char*>(field_data + field_data_count));
     for (size_t i=0; i < field_data_count; i++) {
         buffer.append(field_data[i].name);
-        auto string_view_p = std::get_if<string_view_t>(&field_data[i].value);
-        if (string_view_p) {
-            buffer.append(string_view_p->begin(), string_view_p->end());
+        if (field_data[i].value_type == FieldValueType::STRING_VIEW) {
+            buffer.append(field_data[i].string_view_.begin(), field_data[i].string_view_.end());
         }
     }
 #endif
@@ -86,10 +84,10 @@ SPDLOG_INLINE void log_msg_buffer::update_string_views()
     for (size_t i=0; i < field_data_count; i++) {
         field_data[i].name = string_view_t{buffer.data() + offset, field_data[i].name.size()};
         offset += field_data[i].name.size();
-        auto string_view_p = std::get_if<string_view_t>(&field_data[i].value);
-        if (string_view_p) {
-            field_data[i].value = FieldValue(string_view_t{buffer.data() + offset, string_view_p->size()});
-            offset += string_view_p->size();
+        if (field_data[i].value_type == FieldValueType::STRING_VIEW) {
+            auto &data_value = field_data[i].string_view_;
+            data_value = {buffer.data() + offset, data_value.size()};
+            offset += data_value.size();
         }
     }
 #endif

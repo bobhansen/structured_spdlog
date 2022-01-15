@@ -12,44 +12,29 @@
 #include "spdlog.h"
 
 namespace spdlog {
-
-    template<typename... ArgTypes>
-    constexpr int count_leading_fields(ArgTypes... args [[maybe_unused]]) {
-        return 0;
-    }
-    template<typename... ArgTypes>
-    constexpr int count_leading_fields(const Field&& field, ArgTypes... args) {
-        return 1 + count_leading_fields(args...);
-    }
+namespace details {
+    void append_value(const Field &field, memory_buf_t &dest);
+    std::string value_to_string(const Field &field);
+}
 
     // Stop on empty arg list
     template<size_t N>
     void fill_fields(std::array<Field, N> & result [[maybe_unused]], int n [[maybe_unused]]) {
     }
 
-    // Stop on first non-field value
-    template<typename... ArgTypes, size_t N>
-    void fill_fields(std::array<Field, N> & result [[maybe_unused]], int n [[maybe_unused]], ArgTypes... args [[maybe_unused]] ) {
-    }
-
     template<typename... ArgTypes, size_t N>
     void fill_fields(std::array<Field, N> & result, int n, const Field& f, ArgTypes... args) {
         result[n] = f;
-        fill_fields(result, n+1, args...);
+        fill_fields(result, n+1, std::forward<ArgTypes>(args)...);
     }
 
     template<typename... ArgTypes>
     std::array<Field, sizeof...(ArgTypes)> build_fields(ArgTypes... args) {
         std::array<Field, sizeof...(ArgTypes)> result;
-        fill_fields(result, 0, args...);
+        fill_fields(result, 0, std::forward<ArgTypes>(args)...);
         return result;
     }
 
-    template <typename T>
-    Field F(string_view_t name, const T& val) {
-        Field f={name, val};
-        return f;
-    }
 
     template<typename... Args, size_t N>
     inline void slog(source_loc source, level::level_enum lvl, const std::array<Field,N>& fields, format_string_t<Args...> fmt, Args &&... args)
@@ -61,3 +46,7 @@ namespace spdlog {
 }
 
 #endif // STRUCTURED_SPDLOG_H
+
+#ifdef SPDLOG_HEADER_ONLY
+#    include "structured_spdlog-inl.h"
+#endif

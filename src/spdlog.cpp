@@ -12,6 +12,7 @@
 #include <spdlog/details/os-inl.h>
 #include <spdlog/json_formatter-inl.h>
 #include <spdlog/pattern_formatter-inl.h>
+#include <spdlog/structured_spdlog-inl.h>
 #include <spdlog/details/log_msg-inl.h>
 #include <spdlog/details/log_msg_buffer-inl.h>
 #include <spdlog/logger-inl.h>

@@ -12,8 +12,12 @@ using Catch::Matchers::Matches;
 struct field_patterns {
     std::string name;
     std::string pattern;
-    spdlog::json_field_type field_type = json_field_type::STRING;
+    spdlog::json_field_type field_type;
+
+    field_patterns(const std::string &_name, const std::string &_pattern, spdlog::json_field_type _field_type = json_field_type::STRING) :
+        name(_name), pattern(_pattern), field_type(_field_type) {}
 };
+using P = field_patterns;
 
 template<typename... Args, size_t N>
 static std::string log_to_str(const std::string &msg, const std::array<spdlog::Field,N>& fields,
@@ -41,7 +45,7 @@ static std::string log_to_str(const std::string &msg, const std::array<spdlog::F
 TEST_CASE("json basic output", "[json_formatter]")
 {
     // // Test fields with static outputs
-    REQUIRE(log_to_str("hello", NO_FIELDS, {{"MSG", "%v"}, {"SRC", "%@"}, {"LEVEL", "%l"}}) == R"({"MSG":"hello", "SRC":"source.cpp:99", "LEVEL":"info"})");
+    REQUIRE(log_to_str("hello", NO_FIELDS, {P{"MSG", "%v"}, P{"SRC", "%@"}, P{"LEVEL", "%l"}}) == R"({"MSG":"hello", "SRC":"source.cpp:99", "LEVEL":"info"})");
 
     // // Tests with regex outputs
     REQUIRE_THAT(log_to_str("hello", NO_FIELDS, {{"THREAD","%t", json_field_type::NUMERIC}}), Matches(R"(\{"THREAD":[0-9]+\})"));
@@ -52,11 +56,11 @@ TEST_CASE("json basic output", "[json_formatter]")
     REQUIRE_THAT(log_to_str("hello", NO_FIELDS, {{"TM", spdlog::ISO8601_FLAGS}}), Matches(time_output_regex));
 
     // Fields alone
-    auto fields = spdlog::build_fields(spdlog::F("f1", 1), spdlog::F("f2", "two"), spdlog::F("f3", 3.0));
-    REQUIRE(log_to_str("hello", fields, {}) == R"({"f1":1, "f2":"two", "f3":3.000000})");
+    auto fields = spdlog::build_fields(spdlog::F("f1", 1), spdlog::F("f2", "two"), spdlog::F("f3", 3.0), spdlog::F("f4",true));
+    REQUIRE(log_to_str("hello", fields, {}) == R"({"f1":1, "f2":"two", "f3":3.000000, "f4":true})");
 
     // Fields with message
-    REQUIRE(log_to_str("hello", fields, {{"MSG", "%v"}}) == R"({"MSG":"hello", "f1":1, "f2":"two", "f3":3.000000})");
+    REQUIRE(log_to_str("hello", fields, {{"MSG", "%v"}}) == R"({"MSG":"hello", "f1":1, "f2":"two", "f3":3.000000, "f4":true})");
 
     // Default output
     static const std::string DEFAULT_RESULT_REGEX = std::string("\\{") +
@@ -66,7 +70,8 @@ TEST_CASE("json basic output", "[json_formatter]")
         R"("src_loc":"source.cpp:99", )" +
         R"("f1":1, )" +
         R"("f2":"two", )" +
-        R"("f3":3.0+})";
+        R"("f3":3.0+, )" +
+        R"("f4":true})";
     REQUIRE_THAT(log_to_str("hello", fields, {}, true), Matches(DEFAULT_RESULT_REGEX));
 }
 
@@ -146,7 +151,7 @@ TEST_CASE("json escaping", "[json_formatter]")
 
 }
 
-TEST_CASE("json pattern escaping", "[json_formatter]")
+TEST_CASE("json pattern needs escaping", "[json_formatter]")
 {
     REQUIRE(spdlog::details::pattern_needs_escaping("%v") == true); // messages might be unicode
     REQUIRE(spdlog::details::pattern_needs_escaping("%s") == true); // source files might be unicode
@@ -155,7 +160,3 @@ TEST_CASE("json pattern escaping", "[json_formatter]")
     REQUIRE(spdlog::details::pattern_needs_escaping("no pattern text") == false);
     REQUIRE(spdlog::details::pattern_needs_escaping(spdlog::ISO8601_FLAGS) == false);
 }
-
-// TODO:
-// TEST_CASE("json pattern escaping", "[json_formatter]")
-// Put invalid characters in the pattern and ensure they're escaped
