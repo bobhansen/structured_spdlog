@@ -25,11 +25,11 @@ namespace spdlog {
 
 namespace details {
 
-constexpr char hex_digits[] = "0123456789abcdef";
+SPDLOG_CONSTEXPR char hex_digits[] = "0123456789abcdef";
 
 // 5 -> escape to \uXXXXX
 // 1 -> escape to \n, \r or the like
-constexpr uint8_t extra_chars_lookup[256] = {
+SPDLOG_CONSTEXPR uint8_t extra_chars_lookup[256] = {
     5, 5, 5, 5, 5, 5, 5, 5, 1, 1, 1, 5, 1, 1, 5, 5, // 0x0x
     5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, // 0x1x
     0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 0x2x
@@ -52,7 +52,7 @@ constexpr uint8_t extra_chars_lookup[256] = {
 //    write the whole line to the dest buffer and do one pass of escaping: count,
 //    realloc, escape
 
-void escape_to_end(spdlog::memory_buf_t &dest, size_t start_offset)
+SPDLOG_INLINE void escape_to_end(spdlog::memory_buf_t &dest, size_t start_offset)
 {
    // Check to see if we have any characters that must be escaped
    //   See https://datatracker.ietf.org/doc/html/rfc8259#section-7
@@ -176,8 +176,8 @@ SPDLOG_INLINE bool pattern_needs_escaping(string_view_t pattern)
     return false;
 }
 
-SPDLOG_INLINE pattern_field::pattern_field(const std::string &name, const std::string &pattern, json_field_type field_type, pattern_time_type pattern_time_type_) :
-    formatter_(details::make_unique<pattern_formatter>(pattern, pattern_time_type_, "")),
+SPDLOG_INLINE pattern_field::pattern_field(string_view_t name, string_view_t pattern, json_field_type field_type, pattern_time_type pattern_time_type_) :
+    formatter_(details::make_unique<pattern_formatter>(to_string(pattern), pattern_time_type_, "")),
     field_type_(field_type)
 {
     // TODO - make this all one pattern {"name": "%v", }; since we know the prefix and suffix length,
@@ -198,9 +198,10 @@ SPDLOG_INLINE pattern_field::pattern_field(const std::string &value_prefix, form
 {
 }
 
-SPDLOG_INLINE std::unique_ptr<pattern_field> pattern_field::clone()
+SPDLOG_INLINE std::unique_ptr<pattern_field> pattern_field::clone() const
 {
-    return make_unique<pattern_field>(value_prefix_, formatter_.get(), field_type_, output_needs_escaping_);
+    // Clone using private ctor
+    return std::unique_ptr<pattern_field>(new pattern_field(value_prefix_, formatter_.get(), field_type_, output_needs_escaping_));
 }
 
 SPDLOG_INLINE void pattern_field::format(const details::log_msg &msg, memory_buf_t &dest)
@@ -224,10 +225,20 @@ SPDLOG_INLINE void pattern_field::format(const details::log_msg &msg, memory_buf
 } // namespace details
 
 
+SPDLOG_INLINE json_formatter::json_formatter(std::initializer_list<pattern_field_definition> field_defs, pattern_time_type time_type, std::string eol) :
+    pattern_time_type_(time_type),
+    eol_(eol)
+{
+    for (auto &def: field_defs) {
+        fields_.emplace_back(details::make_unique<details::pattern_field>(def.field_name, def.pattern, def.field_type, pattern_time_type_));
+    }
+}
+
 SPDLOG_INLINE json_formatter::json_formatter(pattern_time_type time_type, std::string eol) :
     pattern_time_type_(time_type),
     eol_(eol)
 {
+    add_default_fields();
 }
 
 SPDLOG_INLINE json_formatter& json_formatter::add_default_fields()

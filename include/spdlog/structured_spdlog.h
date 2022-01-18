@@ -17,30 +17,52 @@ namespace details {
     std::string value_to_string(const Field &field);
 }
 
-    // Stop on empty arg list
-    template<size_t N>
-    void fill_fields(std::array<Field, N> & result [[maybe_unused]], int n [[maybe_unused]]) {
-    }
-
-    template<typename... ArgTypes, size_t N>
-    void fill_fields(std::array<Field, N> & result, int n, const Field& f, ArgTypes... args) {
-        result[n] = f;
-        fill_fields(result, n+1, std::forward<ArgTypes>(args)...);
-    }
-
-    template<typename... ArgTypes>
-    std::array<Field, sizeof...(ArgTypes)> build_fields(ArgTypes... args) {
-        std::array<Field, sizeof...(ArgTypes)> result;
-        fill_fields(result, 0, std::forward<ArgTypes>(args)...);
-        return result;
-    }
+inline void log(source_loc source, level::level_enum lvl, std::initializer_list<Field> fields, string_view_t msg)
+{
+    default_logger_raw()->log(source, lvl, fields, msg);
+}
 
 
-    template<typename... Args, size_t N>
-    inline void slog(source_loc source, level::level_enum lvl, const std::array<Field,N>& fields, format_string_t<Args...> fmt, Args &&... args)
-    {
-        default_logger_raw()->slog(source, lvl, fields, fmt, std::forward<Args>(args)...);
-    }
+inline void log(level::level_enum lvl, std::initializer_list<Field> fields, string_view_t msg)
+{
+    default_logger_raw()->log(source_loc{}, lvl, fields, msg);
+}
+
+
+inline void trace(std::initializer_list<Field> fields, string_view_t msg)
+{
+    default_logger_raw()->log(source_loc{}, level::trace, fields, msg);
+}
+
+
+inline void debug(std::initializer_list<Field> fields, string_view_t msg)
+{
+    default_logger_raw()->log(source_loc{}, level::debug, fields, msg);
+}
+
+
+inline void info(std::initializer_list<Field> fields, string_view_t msg)
+{
+    default_logger_raw()->log(source_loc{}, level::info, fields, msg);
+}
+
+
+inline void warn(std::initializer_list<Field> fields, string_view_t msg)
+{
+    default_logger_raw()->log(source_loc{}, level::warn, fields, msg);
+}
+
+
+inline void error(std::initializer_list<Field> fields, string_view_t msg)
+{
+    default_logger_raw()->log(source_loc{}, level::err, fields, msg);
+}
+
+
+inline void critical(std::initializer_list<Field> fields, string_view_t msg)
+{
+    default_logger_raw()->log(source_loc{}, level::critical, fields, msg);
+}
 
 
 }

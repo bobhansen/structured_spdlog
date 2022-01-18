@@ -84,15 +84,9 @@ public:
     logger &operator=(logger other) SPDLOG_NOEXCEPT;
     void swap(spdlog::logger &other) SPDLOG_NOEXCEPT;
 
-    template<typename... Args, size_t N>
-    void slog(source_loc loc, level::level_enum lvl, const std::array<Field,N>& fields, format_string_t<Args...> fmt, Args &&... args)
+    void log(source_loc loc, level::level_enum lvl, std::initializer_list<Field> fields, string_view_t msg)
     {
-        log_(loc, lvl, fields.data(), N, fmt, std::forward<Args>(args)...);
-    }
-    template<typename... Args, size_t N>
-    void slog(source_loc loc, level::level_enum lvl, const std::array<Field,0>& fields, format_string_t<Args...> fmt, Args &&... args)
-    {
-        log_(loc, lvl, nullptr, 0, fmt, std::forward<Args>(args)...);
+        log_(loc, lvl, fields.begin(), fields.size(), msg);
     }
 
     template<typename... Args>

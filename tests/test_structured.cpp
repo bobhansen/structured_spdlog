@@ -5,16 +5,17 @@
 
 #include "spdlog/details/log_msg_buffer.h"
 
+using spdlog::F;
 
-template<typename T, typename... ArgTypes, size_t N>
-std::string log_info(const std::array<spdlog::Field, N>& fields, const T &what, ArgTypes&&... args)
+
+std::string log_info(std::initializer_list<spdlog::Field> fields, spdlog::string_view_t what)
 {
     std::ostringstream oss;
     auto oss_sink = std::make_shared<spdlog::sinks::ostream_sink_mt>(oss);
 
     spdlog::logger oss_logger("oss", oss_sink);
     oss_logger.set_pattern("%v");
-    oss_logger.slog({}, spdlog::level::info, fields, what, std::forward<ArgTypes>(args)...);
+    oss_logger.log({}, spdlog::level::info, fields, what);
 
     return oss.str().substr(0, oss.str().length() - strlen(spdlog::details::os::default_eol));
 }
@@ -22,8 +23,8 @@ std::string log_info(const std::array<spdlog::Field, N>& fields, const T &what, 
 TEST_CASE("fields", "[structured]")
 {
     // Can we construct fields of all types with lvalues?
-    spdlog::F("var", 1);
-    spdlog::F("var", "val");
+    F("var", 1);
+    F("var", "val");
 
     // Can we construct fields with rvalues?
     std::string str1("str");
@@ -35,37 +36,13 @@ TEST_CASE("fields", "[structured]")
     REQUIRE(cstr_f.value_type == spdlog::FieldValueType::INT);
 }
 
-TEST_CASE("build_fields", "[structured]")
-{
-    auto array0 = spdlog::build_fields();
-    REQUIRE(array0.size() == 0);
-
-    auto array1 = spdlog::build_fields(spdlog::F("var", 1));
-    REQUIRE(array1.size() == 1);
-    REQUIRE(to_string(array1[0].name) == "var");
-    REQUIRE(array1[0].value_type == spdlog::FieldValueType::INT);
-    REQUIRE(array1[0].int_ == 1);
-
-    auto array2 = spdlog::build_fields(spdlog::F("var", 1), spdlog::F("var2", "two"));
-    REQUIRE(array2.size() == 2);
-    REQUIRE(to_string(array2[0].name) == "var");
-    REQUIRE(array2[0].value_type == spdlog::FieldValueType::INT);
-    REQUIRE(array2[0].int_ == 1);
-    REQUIRE(to_string(array2[1].name) == "var2");
-    REQUIRE(array2[1].value_type == spdlog::FieldValueType::STRING_VIEW);
-    REQUIRE(array2[1].string_view_ == "two");
-}
-
 TEST_CASE("field_logging", "[structured]")
 {
     // No fields
-    REQUIRE(log_info(spdlog::NO_FIELDS, "Hello") == "Hello");
+    REQUIRE(log_info({}, "Hello") == "Hello");
 
     // Some fields
-    REQUIRE(log_info(spdlog::build_fields(spdlog::F("k", 1)), "Hello") == "Hello");
-
-    // Fields and fmt
-    REQUIRE(log_info(spdlog::build_fields(spdlog::F("k", 1)), "Hello {}", "world") == "Hello world");
+    REQUIRE(log_info({F("k", 1)}, "Hello") == "Hello");
 }
 
 template<typename T>
@@ -117,8 +94,8 @@ TEST_CASE("buffered_msg_field_copies ", "[structured]")
 {
     std::unique_ptr<spdlog::details::log_msg_buffer> test1;
     {
-        auto array2 = spdlog::build_fields(spdlog::F("var", 1), spdlog::F("var2", "two"));
-        spdlog::details::log_msg test_input1(spdlog::source_loc{}, "name", spdlog::level::info, "msg", array2.data(), array2.size());
+        auto array2 = {F("var", 1), F("var2", "two")};
+        spdlog::details::log_msg test_input1(spdlog::source_loc{}, "name", spdlog::level::info, "msg", array2.begin(), array2.size());
         test1 = spdlog::details::make_unique<spdlog::details::log_msg_buffer>(test_input1);
     }
     REQUIRE(test1->field_data_count == 2);
@@ -143,9 +120,69 @@ TEST_CASE("async_structured ", "[structured]")
     {
         // Build on the stack so it's out of scope
         std::string test_string("abcdefghijklmnopqrstuvwxyz");
-        logger->slog({}, spdlog::level::info, spdlog::build_fields(spdlog::F("str", test_string)), "test msg");
+        logger->log({}, spdlog::level::info, {F("str", test_string)}, "test msg");
     }
     REQUIRE(test_sink->msg_counter() < messages);
     REQUIRE(test_sink->msg_counter() > 0);
     REQUIRE(tp->overrun_counter() > 0);
+}
+
+
+#if SPDLOG_ACTIVE_LEVEL != SPDLOG_LEVEL_DEBUG
+#    error "Invalid SPDLOG_ACTIVE_LEVEL in test. Should be SPDLOG_LEVEL_DEBUG"
+#endif
+
+#define TEST_FILENAME "test_logs/structured_macro_log"
+std::string last_line(const std::string &str) {
+    if (str.empty()) {
+        return "";
+    }
+    auto start = str.begin();
+    auto curr = str.end() - 1;
+
+    // Skip last line
+    while ((*curr == '\n' || *curr == '\r') && curr != start) {
+        curr--;
+    }
+    auto end = curr + 1; // end is exclusive
+
+    while (curr != start && *(curr-1) != '\n' && *(curr-1) != '\r' && curr != start) {
+        curr--;
+    }
+    return std::string(curr, end);
+}
+
+
+TEST_CASE("structured macros", "[structuredX]")
+{
+    prepare_logdir();
+    spdlog::filename_t filename = SPDLOG_FILENAME_T(TEST_FILENAME);
+
+    auto logger = spdlog::create<spdlog::sinks::basic_file_sink_mt>("logger", filename);
+    auto formatter = spdlog::json_formatter::make_unique({{"msg", "%v"}});
+    logger->set_formatter(std::move(formatter));
+    logger->set_level(spdlog::level::trace);
+
+    SPDLOG_LOGGER_TRACE(logger, {}, "Test message 1");
+    SPDLOG_LOGGER_DEBUG(logger, {F("f", 0)}, "Test message 2");
+    logger->flush();
+
+    REQUIRE(last_line(file_contents(TEST_FILENAME)) == R"({"msg":"Test message 2", "f":0})");
+    REQUIRE(count_lines(TEST_FILENAME) == 1);
+
+    auto orig_default_logger = spdlog::default_logger();
+    spdlog::set_default_logger(logger);
+
+    SPDLOG_TRACE({}, "Test message 3");
+    SPDLOG_DEBUG({{"f",1}}, "Test message 4");
+    logger->flush();
+
+    require_message_count(TEST_FILENAME, 2);
+    REQUIRE(last_line(file_contents(TEST_FILENAME)) == R"({"msg":"Test message 4", "f":1})");
+
+    spdlog::error({F("f",2)}, "Test message 5");
+    logger->flush();
+    REQUIRE(last_line(file_contents(TEST_FILENAME)) == R"({"msg":"Test message 5", "f":2})");
+
+    spdlog::set_default_logger(std::move(orig_default_logger));
 }
