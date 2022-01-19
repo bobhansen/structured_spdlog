@@ -1,3 +1,5 @@
+#ifndef SPDLOG_NO_STRUCTURED_SPDLOG
+
 #include "includes.h"
 #include "test_sink.h"
 
@@ -231,3 +233,6 @@ TEST_CASE("structured snapshots", "[structured]")
     step = LOG_IN_THREAD;
     thread->join();
 }
+
+
+#endif // SPDLOG_NO_STRUCTURED_SPDLOG

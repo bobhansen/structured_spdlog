@@ -1,8 +1,7 @@
 // Copyright(c) 2015-present, Gabi Melman & spdlog contributors.
 // Distributed under the MIT License (http://opensource.org/licenses/MIT)
 
-// spdlog main header file.
-// see example.cpp for usage example
+#ifndef SPDLOG_NO_STRUCTURED_SPDLOG
 
 #ifndef STRUCTURED_SPDLOG_H
 #define STRUCTURED_SPDLOG_H
@@ -86,7 +85,7 @@ namespace details {
 
 
 /**
-    Using context_fields to represent the state of the application:
+    Using cotext to represent the state of the application:
 
     NOTE: it is important that the context variable has a name, or it will go out of scope immediately.
         RIGHT: spdlog::context ctx({{"field",value}});
@@ -107,6 +106,11 @@ namespace details {
     }
 
     int main() {
+        // Text output
+        spdlog::default_logger()->set_pattern("%v%V"); // or just use the default
+        foo();
+
+        // JSON output
         auto formatter = spdlog::json_formatter::make_unique({{"program", "contextfield_demo"}}); // process-wide context
         spdlog::default_logger()->set_formatter(formatter);
         foo();
@@ -133,6 +137,8 @@ private:
 } // namespace spdlog
 
 #endif // STRUCTURED_SPDLOG_H
+#endif // NO_STRUCTURED_SPDLOG
+
 
 #ifdef SPDLOG_HEADER_ONLY
 #    include "structured_spdlog-inl.h"

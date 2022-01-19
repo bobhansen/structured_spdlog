@@ -42,6 +42,7 @@ TEST_CASE("json basic output", "[json_formatter]")
     std::string time_output_regex = std::string(R"(\{"TM":")") + std::string(ISO8601_REGEX) + std::string(R"("\})");
     REQUIRE_THAT(log_to_str("hello", {}, {{"TM", spdlog::ISO8601_FLAGS}}), Matches(time_output_regex));
 
+#ifndef SPDLOG_NO_STRUCTURED_SPDLOG
     // Fields alone
     auto fields = {spdlog::F("f1", 1), spdlog::F("f2", "two"), spdlog::F("f3", 3.0), spdlog::F("f4",true)};
     REQUIRE(log_to_str("hello", fields, {}) == R"({"f1":1, "f2":"two", "f3":3.000000, "f4":true})");
@@ -67,6 +68,7 @@ TEST_CASE("json basic output", "[json_formatter]")
         R"("f3":3.0+, )" +
         R"("f4":true})";
     REQUIRE_THAT(log_to_str("hello", fields, {}, true), Matches(DEFAULT_RESULT_REGEX));
+#endif // SPDLOG_NO_STRUCTURED_SPDLOG
 }
 
 TEST_CASE("json escaped output", "[json_formatter]")
@@ -74,8 +76,10 @@ TEST_CASE("json escaped output", "[json_formatter]")
     REQUIRE(log_to_str("hello_\x1a", {}, {{"MSG", "%v"}}) == R"({"MSG":"hello_\u001a"})");
     REQUIRE(log_to_str("hello", {}, {{"MSG_\x1a", "%v"}}) == R"({"MSG_\u001a":"hello"})");
 
+#ifndef SPDLOG_NO_STRUCTURED_SPDLOG
     auto fields = {spdlog::F("hello_\x1a", "goodbye_\x1b")};
     REQUIRE(log_to_str("", fields, {}) == R"({"hello_\u001a":"goodbye_\u001b"})");
+#endif // SPDLOG_NO_STRUCTURED_SPDLOG
 }
 
 TEST_CASE("json escaping", "[json_formatter]")

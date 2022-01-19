@@ -27,7 +27,12 @@ SPDLOG_INLINE log_msg::log_msg(spdlog::log_clock::time_point log_time, spdlog::s
     , field_data_count(field_count)
     , context_field_data(threadlocal_context_head())
 #endif
-{}
+{
+#ifdef SPDLOG_NO_STRUCTURED_SPDLOG
+    (void) fields;
+    (void) field_count;
+#endif
+}
 
 SPDLOG_INLINE log_msg::log_msg(spdlog::log_clock::time_point log_time, spdlog::source_loc loc, string_view_t a_logger_name,
     spdlog::level::level_enum lvl, spdlog::string_view_t msg)

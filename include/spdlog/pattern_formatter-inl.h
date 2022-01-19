@@ -708,6 +708,7 @@ public:
     //    and lots more expressive things
     void format(const details::log_msg &msg, const std::tm &, memory_buf_t &dest) override
     {
+#ifndef SPDLOG_NO_STRUCTURED_SPDLOG
         // TODO: padding
         for (size_t i=0; i < msg.field_data_count; i++) {
             dest.push_back(' ');
@@ -725,6 +726,10 @@ public:
                 details::append_value(field, dest);
             }
         }
+#else
+    (void) msg;
+    (void) dest;
+#endif // SPDLOG_NO_STRUCTURED_SPDLOG
     }
 };
 

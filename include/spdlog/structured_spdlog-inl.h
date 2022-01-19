@@ -1,6 +1,8 @@
 // Copyright(c) 2015-present, Gabi Melman & spdlog contributors.
 // Distributed under the MIT License (http://opensource.org/licenses/MIT)
 
+#ifndef SPDLOG_NO_STRUCTURED_SPDLOG
+
 #ifndef STRUCTURED_SPDLOG_INL_H
 #define STRUCTURED_SPDLOG_INL_H
 
@@ -9,6 +11,12 @@
 #ifndef SPDLOG_HEADER_ONLY
 #    include <spdlog/structured_spdlog.h>
 #endif
+
+// TODO(opt): static field names on the stack
+//    Rather than passing std::initializer_list<Field>, I intuit that we should be able to construct
+//    templates such that log_ eventually gets passed a std::array<string_view,N> && names and
+//    std::array<FieldValue,N> && values.  The names will in most cases be constexprs and can be built
+//    entirely in the data segment, and the runtime will be copying only the value data in
 
 namespace spdlog {
 namespace details {
@@ -154,4 +162,6 @@ SPDLOG_INLINE replacement_context::~replacement_context()
 
 } // namespace spdlog
 
-#endif
+#endif // STRUCTURED_SPDLOG_INL_H
+
+#endif // SPDLOG_NO_STRUCTURED_SPDLOG

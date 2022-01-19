@@ -290,6 +290,7 @@ SPDLOG_INLINE bool is_numeric(FieldValueType type)
 
 SPDLOG_INLINE void json_formatter::format_data_field(const Field &field, spdlog::memory_buf_t &dest)
 {
+#ifndef SPDLOG_NO_STRUCTURED_SPDLOG
     // TODO: should we keep a hash table of field names->escaped field names?
     // If the same fields keep cropping up and have to be escaped again and again it could have
     //   a small but noticeable impact on performance
@@ -313,6 +314,10 @@ SPDLOG_INLINE void json_formatter::format_data_field(const Field &field, spdlog:
 
     dest.push_back(',');
     dest.push_back(' ');
+#else
+    (void) field;
+    (void) dest;
+#endif
 }
 
 
@@ -327,6 +332,8 @@ SPDLOG_INLINE void json_formatter::format(const details::log_msg &msg, memory_bu
     for (auto &field_ptr: fields_) {
         field_ptr->format(msg, dest);
     }
+
+#ifndef SPDLOG_NO_STRUCTURED_SPDLOG
     for (size_t i=0; i < msg.field_data_count; i++) {
         format_data_field(msg.field_data[i], dest);
     }
@@ -335,6 +342,7 @@ SPDLOG_INLINE void json_formatter::format(const details::log_msg &msg, memory_bu
             format_data_field(field, dest);
         }
     }
+#endif
 
     // Strip trailing space if it's there
     if (dest[dest.size() -1] == ' ') {

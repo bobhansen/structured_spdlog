@@ -7,8 +7,6 @@
 #    include <spdlog/details/log_msg_buffer.h>
 #endif
 
-#include <iostream>
-
 namespace spdlog {
 namespace details {
 
@@ -52,7 +50,6 @@ SPDLOG_INLINE log_msg_buffer::log_msg_buffer(const log_msg_buffer &other)
 
 SPDLOG_INLINE log_msg_buffer::log_msg_buffer(log_msg_buffer &&other) SPDLOG_NOEXCEPT : log_msg{other}, buffer{std::move(other.buffer)}
 {
-    std::cout << "this_count=" << field_data_count << " other_count=" << other.field_data_count << std::endl;
     update_string_views();
 }
 
@@ -69,18 +66,16 @@ SPDLOG_INLINE log_msg_buffer &log_msg_buffer::operator=(log_msg_buffer &&other) 
 {
     log_msg::operator=(other);
     buffer = std::move(other.buffer);
-    if (field_data_count != other.field_data_count) {
-        abort();
-    }
     update_string_views();
     return *this;
 }
 
 SPDLOG_INLINE void log_msg_buffer::update_string_views()
 {
+    size_t offset = 0;
 #ifndef SPDLOG_NO_STRUCTURED_SPDLOG
     field_data = reinterpret_cast<Field *>(buffer.data());
-    size_t offset = sizeof(Field) * field_data_count;
+    offset = sizeof(Field) * field_data_count;
     for (size_t i=0; i < field_data_count; i++) {
         field_data[i].name = string_view_t{buffer.data() + offset, field_data[i].name.size()};
         offset += field_data[i].name.size();
