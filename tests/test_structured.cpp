@@ -14,7 +14,7 @@ std::string log_info(std::initializer_list<spdlog::Field> fields, spdlog::string
     auto oss_sink = std::make_shared<spdlog::sinks::ostream_sink_mt>(oss);
 
     spdlog::logger oss_logger("oss", oss_sink);
-    oss_logger.set_pattern("%v");
+    oss_logger.set_pattern("%v%V");
     oss_logger.log({}, spdlog::level::info, fields, what);
 
     return oss.str().substr(0, oss.str().length() - strlen(spdlog::details::os::default_eol));
@@ -42,7 +42,7 @@ TEST_CASE("field_logging", "[structured]")
     REQUIRE(log_info({}, "Hello") == "Hello");
 
     // Some fields
-    REQUIRE(log_info({F("k", 1)}, "Hello") == "Hello");
+    REQUIRE(log_info({F("k", 1)}, "Hello") == "Hello k:1");
 }
 
 template<typename T>
@@ -159,15 +159,14 @@ TEST_CASE("structured macros", "[structuredX]")
     spdlog::filename_t filename = SPDLOG_FILENAME_T(TEST_FILENAME);
 
     auto logger = spdlog::create<spdlog::sinks::basic_file_sink_mt>("logger", filename);
-    auto formatter = spdlog::json_formatter::make_unique({{"msg", "%v"}});
-    logger->set_formatter(std::move(formatter));
+    logger->set_pattern("%v%V");
     logger->set_level(spdlog::level::trace);
 
     SPDLOG_LOGGER_TRACE(logger, {}, "Test message 1");
     SPDLOG_LOGGER_DEBUG(logger, {F("f", 0)}, "Test message 2");
     logger->flush();
 
-    REQUIRE(last_line(file_contents(TEST_FILENAME)) == R"({"msg":"Test message 2", "f":0})");
+    REQUIRE(last_line(file_contents(TEST_FILENAME)) == "Test message 2 f:0");
     REQUIRE(count_lines(TEST_FILENAME) == 1);
 
     auto orig_default_logger = spdlog::default_logger();
@@ -178,11 +177,11 @@ TEST_CASE("structured macros", "[structuredX]")
     logger->flush();
 
     require_message_count(TEST_FILENAME, 2);
-    REQUIRE(last_line(file_contents(TEST_FILENAME)) == R"({"msg":"Test message 4", "f":1})");
+    REQUIRE(last_line(file_contents(TEST_FILENAME)) == "Test message 4 f:1");
 
     spdlog::error({F("f",2)}, "Test message 5");
     logger->flush();
-    REQUIRE(last_line(file_contents(TEST_FILENAME)) == R"({"msg":"Test message 5", "f":2})");
+    REQUIRE(last_line(file_contents(TEST_FILENAME)) == "Test message 5 f:2");
 
     spdlog::set_default_logger(std::move(orig_default_logger));
 }
