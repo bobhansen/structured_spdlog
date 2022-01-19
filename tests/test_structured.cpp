@@ -212,8 +212,9 @@ TEST_CASE("structured snapshots", "[structured]")
     std::unique_ptr<std::thread> thread;
     {
         spdlog::context inner_ctx({{"c1","1"}});
-        thread = std::make_unique<std::thread>(
-            [ctx_snapshot=spdlog::snapshot_context_fields(), &step] {
+        auto ctx_snapshot=spdlog::snapshot_context_fields();
+        thread = spdlog::details::make_unique<std::thread>(
+            [ctx_snapshot, &step] {
             spdlog::replacement_context ctx(ctx_snapshot);
             step = steps::CTX_REPLACED;
             while(step != LOG_IN_THREAD) ; // spin until ready

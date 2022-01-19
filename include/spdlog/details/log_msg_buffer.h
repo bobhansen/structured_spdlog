@@ -5,6 +5,8 @@
 
 #include <spdlog/details/log_msg.h>
 
+#include <vector>
+
 namespace spdlog {
 namespace details {
 
@@ -14,6 +16,8 @@ namespace details {
 class SPDLOG_API log_msg_buffer : public log_msg
 {
     memory_buf_t buffer;
+    std::vector<Field> field_buffer;
+
     void update_string_views();
 
 public:

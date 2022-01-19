@@ -15,6 +15,7 @@
 #include <type_traits>
 #include <functional>
 #include <cstdio>
+#include <type_traits>
 
 #ifdef SPDLOG_USE_STD_FORMAT
 #    include <string_view>
