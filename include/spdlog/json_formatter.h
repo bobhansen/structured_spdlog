@@ -80,7 +80,7 @@ public:
     void format(const details::log_msg &msg, memory_buf_t &dest) override;
 
 private:
-    void format_data_fields(const Field * fields, size_t field_count, spdlog::memory_buf_t &dest);
+    void format_data_field(const Field &field, spdlog::memory_buf_t &dest);
 
     pattern_time_type pattern_time_type_;
     std::string eol_;

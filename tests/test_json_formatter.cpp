@@ -49,6 +49,13 @@ TEST_CASE("json basic output", "[json_formatter]")
     // Fields with message
     REQUIRE(log_to_str("hello", fields, {{"MSG", "%v"}}) == R"({"MSG":"hello", "f1":1, "f2":"two", "f3":3.000000, "f4":true})");
 
+    // Fields with context
+    {
+        spdlog::context ctx1({{"c1",10}});
+        spdlog::context ctx2({{"c2",11}});
+        REQUIRE(log_to_str("hello", fields, {{"MSG", "%v"}}) == R"({"MSG":"hello", "f1":1, "f2":"two", "f3":3.000000, "f4":true, "c2":11, "c1":10})");
+    }
+
     // Default output
     static const std::string DEFAULT_RESULT_REGEX = std::string("\\{") +
         R"("time":")" + ISO8601_REGEX + R"(", )" +

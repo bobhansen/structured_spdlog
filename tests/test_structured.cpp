@@ -122,6 +122,7 @@ TEST_CASE("async_structured ", "[structured]")
         std::string test_string("abcdefghijklmnopqrstuvwxyz");
         logger->log({}, spdlog::level::info, {F("str", test_string)}, "test msg");
     }
+    logger->flush();
     REQUIRE(test_sink->msg_counter() < messages);
     REQUIRE(test_sink->msg_counter() > 0);
     REQUIRE(tp->overrun_counter() > 0);
@@ -153,7 +154,7 @@ std::string last_line(const std::string &str) {
 }
 
 
-TEST_CASE("structured macros", "[structuredX]")
+TEST_CASE("structured macros", "[structured]")
 {
     prepare_logdir();
     spdlog::filename_t filename = SPDLOG_FILENAME_T(TEST_FILENAME);
@@ -173,15 +174,60 @@ TEST_CASE("structured macros", "[structuredX]")
     spdlog::set_default_logger(logger);
 
     SPDLOG_TRACE({}, "Test message 3");
-    SPDLOG_DEBUG({{"f",1}}, "Test message 4");
+    SPDLOG_DEBUG({F("f",1)}, "Test message 4");
     logger->flush();
 
     require_message_count(TEST_FILENAME, 2);
     REQUIRE(last_line(file_contents(TEST_FILENAME)) == "Test message 4 f:1");
 
-    spdlog::error({F("f",2)}, "Test message 5");
-    logger->flush();
-    REQUIRE(last_line(file_contents(TEST_FILENAME)) == "Test message 5 f:2");
-
     spdlog::set_default_logger(std::move(orig_default_logger));
+}
+
+TEST_CASE("structured context", "[structured]")
+{
+    {
+        spdlog::context ctx({{"c1","1"}});
+        REQUIRE(log_info({}, "Hello") == "Hello c1:1");
+    }
+
+    {
+        spdlog::context ctx1({{"c1","1"}});
+        {
+            spdlog::context ctx2({{"c2","2"}});
+            REQUIRE(log_info({}, "Hello") == "Hello c2:2 c1:1");
+        }
+        REQUIRE(log_info({}, "Hello") == "Hello c1:1");
+    }
+
+    REQUIRE(log_info({}, "Hello") == "Hello");
+}
+
+TEST_CASE("structured snapshots", "[structured]")
+{
+    enum steps {START, CTX_REPLACED, LOG_IN_THREAD};
+    std::atomic<steps> step{steps::START};
+
+    std::unique_ptr<std::thread> thread;
+    {
+        spdlog::context inner_ctx({{"c1","1"}});
+        thread = std::make_unique<std::thread>(
+            [ctx_snapshot=spdlog::snapshot_context_fields(), &step] {
+            spdlog::replacement_context ctx(ctx_snapshot);
+            step = steps::CTX_REPLACED;
+            while(step != LOG_IN_THREAD) ; // spin until ready
+            REQUIRE(log_info({}, "Hello") == "Hello c1:1");
+        });
+    }
+    // inner_ctx should be fully out of scope at this point
+
+    // Wait for the context to be replaced in the thread, but verify
+    //   that it doesn't affect the context of the main thread
+    while(step != CTX_REPLACED) ;
+    spdlog::context main_ctx({{"c2","2"}});
+    REQUIRE(log_info({}, "Hello") == "Hello c2:2");
+
+    // Verify that setting the context on the main thread doesn't
+    //    effect the test thread
+    step = LOG_IN_THREAD;
+    thread->join();
 }

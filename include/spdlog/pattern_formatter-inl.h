@@ -716,6 +716,15 @@ public:
             dest.push_back(':');
             details::append_value(field, dest);
         }
+
+        if (msg.context_field_data) {
+            for (auto &field: *msg.context_field_data) {
+                dest.push_back(' ');
+                fmt_helper::append_string_view(field.name, dest);
+                dest.push_back(':');
+                details::append_value(field, dest);
+            }
+        }
     }
 };
 

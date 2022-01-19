@@ -8,6 +8,7 @@
 
 namespace spdlog {
 namespace details {
+class context_data;
 struct SPDLOG_API log_msg
 {
     log_msg() = default;
@@ -33,6 +34,7 @@ struct SPDLOG_API log_msg
 
     Field *field_data{nullptr};
     size_t field_data_count{0};
+    std::shared_ptr<context_data> context_field_data;
 };
 } // namespace details
 } // namespace spdlog

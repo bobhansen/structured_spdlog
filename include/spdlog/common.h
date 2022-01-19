@@ -367,7 +367,11 @@ struct Field {
     Field(const string_view_t &field_name, const char (&val)[N]): name(field_name), value_type(FieldValueType::STRING_VIEW), string_view_{val, N-1} {}
 };
 using F=Field;
-constexpr auto NO_FIELDS = std::array<Field,0>();
+
+namespace details {
+    class context_data;
+    SPDLOG_API std::shared_ptr<context_data>& threadlocal_context_head();
+}
 
 namespace details {
 // make_unique support for pre c++14

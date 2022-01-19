@@ -11,61 +11,126 @@
 
 #include "spdlog.h"
 
+#include <iterator>
+
 namespace spdlog {
+
+
+SPDLOG_API struct context_iterator
+{
+    /**
+        For formatters, walk all of the current context fields for formatting and display.
+
+        if (msg.context_field_data) {
+            for (auto &field: *msg.context_field_data) {
+                std::cout << to_string(field.name) << "=" << spdlog::details::value_to_string(field) << " ";
+            }
+        }
+    **/
+    using iterator_catecory = std::forward_iterator_tag;
+    using value_type        = Field;
+    using pointer           = const Field*;
+    using reference         = const Field&;
+
+    context_iterator(details::context_data* ctx, size_t idx) :
+        data_(ctx), idx_(idx) {}
+
+    reference operator*();
+    pointer operator->();
+
+    // Prefix increment
+    context_iterator& operator++();
+
+    // Postfix increment
+    context_iterator operator++(int) { context_iterator result(data_,idx_); ++result; return result; }
+
+    friend bool operator== (const context_iterator& a, const context_iterator& b) { return a.data_ == b.data_ && a.idx_ == b.idx_; };
+    friend bool operator!= (const context_iterator& a, const context_iterator& b) { return a.data_ != b.data_ || a.idx_ != b.idx_; };
+
+private:
+    details::context_data* data_;
+    size_t                 idx_;
+};
+
 namespace details {
-    void append_value(const Field &field, memory_buf_t &dest);
-    std::string value_to_string(const Field &field);
-}
+    void SPDLOG_API append_value(const Field &field, memory_buf_t &dest);
+    std::string SPDLOG_API value_to_string(const Field &field);
 
-inline void log(source_loc source, level::level_enum lvl, std::initializer_list<Field> fields, string_view_t msg)
-{
-    default_logger_raw()->log(source, lvl, fields, msg);
-}
+    // A linked list of context_data field collections
+    // TODO(opt): implement caching flattened parents
+    //    We can track how many times there has been another context that
+    //    points to this one as a parent.  As an optimization, we can accumulate all of
+    //    the fields of the parents into fields_ when the number of children gets to 2 or 3
+    //    NB: If number of children gets to (very large), reset it to (something small) to guard
+    //    against wraparound at MAX_INT
+    // TODO(opt): lazily use shared_ptr
+    //    If we're not submitting to a multithreaded logger or snapshotting, we can just use raw pointers
+    //    instead of taking the cache miss of an atomic operation in the shared_ptr.  We should
+    //    benchmark to see how much it costs us in the single-threaded case
+    SPDLOG_API struct context_data {
+        std::shared_ptr<context_data> parent_fields_;
+        std::vector<Field>            fields_;
+        memory_buf_t                  buffers_; // storage for strings in fields_
 
+        context_data(std::shared_ptr<context_data> parent_fields, const Field * fields, size_t num_fields);
+        ~context_data();
 
-inline void log(level::level_enum lvl, std::initializer_list<Field> fields, string_view_t msg)
-{
-    default_logger_raw()->log(source_loc{}, lvl, fields, msg);
-}
+        // Iterator support
+        context_iterator begin() { return context_iterator(this, 0); }
+        context_iterator end()   { return context_iterator(nullptr, 0); }
+    };
 
-
-inline void trace(std::initializer_list<Field> fields, string_view_t msg)
-{
-    default_logger_raw()->log(source_loc{}, level::trace, fields, msg);
-}
-
-
-inline void debug(std::initializer_list<Field> fields, string_view_t msg)
-{
-    default_logger_raw()->log(source_loc{}, level::debug, fields, msg);
-}
-
-
-inline void info(std::initializer_list<Field> fields, string_view_t msg)
-{
-    default_logger_raw()->log(source_loc{}, level::info, fields, msg);
-}
-
-
-inline void warn(std::initializer_list<Field> fields, string_view_t msg)
-{
-    default_logger_raw()->log(source_loc{}, level::warn, fields, msg);
+    // Thread-local context fields
+    using context_snapshot = std::shared_ptr<context_data>;
 }
 
 
-inline void error(std::initializer_list<Field> fields, string_view_t msg)
-{
-    default_logger_raw()->log(source_loc{}, level::err, fields, msg);
-}
+/**
+    Using context_fields to represent the state of the application:
+
+    NOTE: it is important that the context variable has a name, or it will go out of scope immediately.
+        RIGHT: spdlog::context ctx({{"field",value}});
+        WRONG: spdlog::context({{"field",value}});
+
+    void bar() {
+        spdlog::info({{"processing", "bar"}});                       // prints "program:contextfield_demo running:foo processing:bar"
+        std::thread th([ctx_snapshot=snapshot_context_fields()] {    // copy the threadlocal context for use in another thread
+            spdlog::replacement_context ctx(ctx_snapshot);           // Log with ctx_snapshot while ctx is still on the stack
+            spdlog::info({{"function", "in_thread"}});               // prints "program:contextfield_demo running:foo function:in_thread"
+        });
+        th.join();
+    }
+
+    void foo() {
+        spdlog::context ctx({{"running", "foo"}}); // set context on the stack; goes away after ctx goes out of scope
+        bar();
+    }
+
+    int main() {
+        auto formatter = spdlog::json_formatter::make_unique({{"program", "contextfield_demo"}}); // process-wide context
+        spdlog::default_logger()->set_formatter(formatter);
+        foo();
+    }
+**/
+class SPDLOG_API context final {
+public:
+    context(std::initializer_list<Field> fields);
+    ~context();
+private:
+    std::shared_ptr<details::context_data> context_to_restore_;
+};
+
+SPDLOG_API details::context_snapshot snapshot_context_fields();
+class SPDLOG_API replacement_context final {
+public:
+    replacement_context(details::context_snapshot data);
+    ~replacement_context();
+private:
+    std::shared_ptr<details::context_data> old_context_fields_;
+};
 
 
-inline void critical(std::initializer_list<Field> fields, string_view_t msg)
-{
-    default_logger_raw()->log(source_loc{}, level::critical, fields, msg);
-}
-
-
-}
+} // namespace spdlog
 
 #endif // STRUCTURED_SPDLOG_H
 

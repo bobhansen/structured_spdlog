@@ -288,34 +288,31 @@ SPDLOG_INLINE bool is_numeric(FieldValueType type)
     abort();  // we should never get here
 }
 
-SPDLOG_INLINE void json_formatter::format_data_fields(const Field * fields, size_t field_count, spdlog::memory_buf_t &dest)
+SPDLOG_INLINE void json_formatter::format_data_field(const Field &field, spdlog::memory_buf_t &dest)
 {
     // TODO: should we keep a hash table of field names->escaped field names?
     // If the same fields keep cropping up and have to be escaped again and again it could have
     //   a small but noticeable impact on performance
-    for (size_t i=0; i < field_count; i++) {
-        auto &field = fields[i];
-        dest.push_back('"');
-        size_t offset = dest.size();
-        details::fmt_helper::append_string_view(field.name, dest);
-        details::escape_to_end(dest, offset);
-        dest.push_back('"');
-        dest.push_back(':');
+    dest.push_back('"');
+    size_t offset = dest.size();
+    details::fmt_helper::append_string_view(field.name, dest);
+    details::escape_to_end(dest, offset);
+    dest.push_back('"');
+    dest.push_back(':');
 
-        bool numeric = is_numeric(field.value_type);
-        if (!numeric) {
-                dest.push_back('"');
-        }
-        size_t start_offset = dest.size();
-        details::append_value(field, dest);
-        details::escape_to_end(dest, start_offset);
-        if (!numeric) {
-                dest.push_back('"');
-        }
-
-        dest.push_back(',');
-        dest.push_back(' ');
+    bool numeric = is_numeric(field.value_type);
+    if (!numeric) {
+            dest.push_back('"');
     }
+    size_t start_offset = dest.size();
+    details::append_value(field, dest);
+    details::escape_to_end(dest, start_offset);
+    if (!numeric) {
+            dest.push_back('"');
+    }
+
+    dest.push_back(',');
+    dest.push_back(' ');
 }
 
 
@@ -330,7 +327,14 @@ SPDLOG_INLINE void json_formatter::format(const details::log_msg &msg, memory_bu
     for (auto &field_ptr: fields_) {
         field_ptr->format(msg, dest);
     }
-    format_data_fields(msg.field_data, msg.field_data_count, dest);
+    for (size_t i=0; i < msg.field_data_count; i++) {
+        format_data_field(msg.field_data[i], dest);
+    }
+    if (msg.context_field_data) {
+        for (auto &field: *msg.context_field_data) {
+            format_data_field(field, dest);
+        }
+    }
 
     // Strip trailing space if it's there
     if (dest[dest.size() -1] == ' ') {

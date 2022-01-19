@@ -50,7 +50,107 @@ SPDLOG_INLINE std::string value_to_string(const Field &field)
     return to_string(buf);
 }
 
+
+SPDLOG_INLINE context_data::context_data(std::shared_ptr<context_data> parent_fields, const Field * fields, size_t num_fields) :
+            parent_fields_(parent_fields), fields_(fields, fields + num_fields)
+{
+    // Find total required storage
+    size_t size = 0;
+    for (auto &field: fields_) {
+        size += field.name.size();
+        if (field.value_type == FieldValueType::STRING_VIEW) {
+            size += field.string_view_.size();
+        }
+    }
+    buffers_.resize(size);
+
+    // Copy any string views into buffers_ and point the string view to the new copy
+    size_t offset = 0;
+    for (auto &field: fields_) {
+        size_t field_size = field.name.size();
+        std::memcpy(&buffers_[offset], field.name.data(), field_size);
+        field.name = string_view_t(&buffers_[offset], field_size);
+        offset += field_size;
+
+        if (field.value_type == FieldValueType::STRING_VIEW) {
+            field_size = field.string_view_.size();
+            std::memcpy(&buffers_[offset], field.string_view_.data(), field_size);
+            field.string_view_ = string_view_t(&buffers_[offset], field_size);
+            offset += field_size;
+        }
+    }
+
+    assert(offset == buffers_.size());
+}
+
+SPDLOG_INLINE context_data::~context_data()
+{
+    buffers_.resize(0);
+}
+
 } // namespace details
+
+
+//
+// Contexts
+//
+SPDLOG_INLINE context::context(std::initializer_list<Field> fields)
+{
+    if (fields.size() > 0) {
+        std::shared_ptr<details::context_data>& context_head = details::threadlocal_context_head();
+
+        context_to_restore_ = context_head;
+
+        auto new_context_head = std::make_shared<details::context_data>(context_head, fields.begin(), fields.size());
+        context_head = new_context_head;
+    } else {
+        // Never store a link with zero fields; iterator++ needs to know that when it follows a traversal, it will
+        //    be pointing to context_data with at least one field.
+        // When this goes out of context, just put the same head back
+        context_to_restore_ = details::threadlocal_context_head();
+    }
+}
+SPDLOG_INLINE context::~context()
+{
+    details::threadlocal_context_head() = context_to_restore_;
+}
+
+// context_iterators
+SPDLOG_INLINE context_iterator& context_iterator::operator++()
+{
+    if (data_ && (++idx_ == data_->fields_.size())) {
+        data_ = data_->parent_fields_.get(); // may be nullptr
+        idx_ = 0;
+    }
+    return *this;
+}
+
+SPDLOG_INLINE context_iterator::reference context_iterator::operator*()
+{
+    return data_->fields_[idx_];
+}
+SPDLOG_INLINE context_iterator::pointer context_iterator::operator->()
+{
+    return &data_->fields_[idx_];
+}
+
+// snapshots
+SPDLOG_INLINE details::context_snapshot snapshot_context_fields()
+{
+    return details::threadlocal_context_head();
+}
+
+SPDLOG_INLINE replacement_context::replacement_context(details::context_snapshot data) :
+    old_context_fields_(details::threadlocal_context_head())
+{
+    details::threadlocal_context_head() = data;
+}
+
+SPDLOG_INLINE replacement_context::~replacement_context()
+{
+    details::threadlocal_context_head() = old_context_fields_;
+}
+
 
 } // namespace spdlog
 
