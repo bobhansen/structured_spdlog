@@ -187,6 +187,40 @@ inline void log(level::level_enum lvl, const T &msg)
     default_logger_raw()->log(lvl, msg);
 }
 
+#ifndef SPDLOG_NO_STRUCTURED_SPDLOG
+inline void trace(std::initializer_list<Field> fields, string_view_t msg)
+{
+    default_logger_raw()->log(source_loc{}, level::trace, fields, msg);
+}
+
+inline void debug(std::initializer_list<Field> fields, string_view_t msg)
+{
+    default_logger_raw()->log(source_loc{}, level::debug, fields, msg);
+}
+
+inline void info(std::initializer_list<Field> fields, string_view_t msg)
+{
+    default_logger_raw()->log(source_loc{}, level::info, fields, msg);
+}
+
+inline void warn(std::initializer_list<Field> fields, string_view_t msg)
+{
+    default_logger_raw()->log(source_loc{}, level::warn, fields, msg);
+}
+
+inline void error(std::initializer_list<Field> fields, string_view_t msg)
+{
+    default_logger_raw()->log(source_loc{}, level::err, fields, msg);
+}
+
+inline void critical(std::initializer_list<Field> fields, string_view_t msg)
+{
+    default_logger_raw()->log(source_loc{}, level::critical, fields, msg);
+}
+#endif // SPDLOG_NO_STRUCTURED_SPDLOG
+
+
+
 #ifdef SPDLOG_WCHAR_TO_UTF8_SUPPORT
 template<typename... Args>
 inline void log(source_loc source, level::level_enum lvl, wformat_string_t<Args...> fmt, Args &&... args)

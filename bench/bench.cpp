@@ -30,6 +30,13 @@
 void bench(int howmany, std::shared_ptr<spdlog::logger> log);
 void bench_mt(int howmany, std::shared_ptr<spdlog::logger> log, size_t thread_count);
 
+#ifndef SPDLOG_NO_STRUCTURED_SPDLOG
+#include "spdlog/structured_spdlog.h"
+#include "spdlog/json_formatter.h"
+
+void bench_fields(int howmany, std::shared_ptr<spdlog::logger> log);
+#endif // SPDLOG_NO_STRUCTURED_SPDLOG
+
 // void bench_default_api(int howmany, std::shared_ptr<spdlog::logger> log);
 // void bench_c_string(int howmany, std::shared_ptr<spdlog::logger> log);
 
@@ -108,6 +115,37 @@ void bench_single_threaded(int iters)
     empty_logger_tracing->set_level(spdlog::level::off);
     empty_logger_tracing->enable_backtrace(32);
     bench(iters, empty_logger_tracing);
+
+#ifndef SPDLOG_NO_STRUCTURED_SPDLOG
+    spdlog::info("");
+    auto basic_field_st = spdlog::basic_logger_st("basic_fields_st", "logs/basic_fields_st.log", true);
+    bench_fields(iters, basic_field_st);
+
+    auto basic_json_st = spdlog::basic_logger_st("basic_json_st", "logs/basic_json_st.log", true);
+    basic_json_st->set_formatter(spdlog::details::make_unique<spdlog::json_formatter>());
+    bench_fields(iters, basic_json_st);
+
+    {
+        spdlog::context ctx({{"ctx", 1}});
+        auto basic_1ctx_st = spdlog::basic_logger_st("basic_1ctx_st", "logs/basic_1ctx_st.log", true);
+        bench_fields(iters, basic_1ctx_st);
+    }
+
+    {
+        spdlog::context ctx0({{"ctx", 1}});
+        spdlog::context ctx1({{"ctx", 1}});
+        spdlog::context ctx2({{"ctx", 1}});
+        spdlog::context ctx3({{"ctx", 1}});
+        spdlog::context ctx4({{"ctx", 1}});
+        spdlog::context ctx5({{"ctx", 1}});
+        spdlog::context ctx6({{"ctx", 1}});
+        spdlog::context ctx7({{"ctx", 1}});
+        spdlog::context ctx8({{"ctx", 1}});
+        spdlog::context ctx9({{"ctx", 1}});
+        auto basic_10ctx_st = spdlog::basic_logger_st("basic_10ctx_st", "logs/basic_10ctx_st.log", true);
+        bench_fields(iters, basic_10ctx_st);
+    }
+#endif
 }
 
 int main(int argc, char *argv[])
@@ -144,6 +182,30 @@ int main(int argc, char *argv[])
     }
     return EXIT_SUCCESS;
 }
+
+
+#ifndef SPDLOG_NO_STRUCTURED_SPDLOG
+void bench_fields(int howmany, std::shared_ptr<spdlog::logger> log)
+{
+    using std::chrono::duration;
+    using std::chrono::duration_cast;
+    using std::chrono::high_resolution_clock;
+
+    auto start = high_resolution_clock::now();
+    for (auto i = 0; i < howmany; ++i)
+    {
+        log->log(spdlog::source_loc{}, spdlog::level::info, {{"msg number",i}}, "Hello logger");
+    }
+
+    auto delta = high_resolution_clock::now() - start;
+    auto delta_d = duration_cast<duration<double>>(delta).count();
+
+    spdlog::info(spdlog::fmt_lib::format(
+        std::locale("en_US.UTF-8"), "{:<30} Elapsed: {:0.2f} secs {:>16L}/sec", log->name(), delta_d, int(howmany / delta_d)));
+    spdlog::drop(log->name());
+}
+#endif
+
 
 void bench(int howmany, std::shared_ptr<spdlog::logger> log)
 {

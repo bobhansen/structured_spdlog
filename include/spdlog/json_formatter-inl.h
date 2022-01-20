@@ -244,7 +244,7 @@ SPDLOG_INLINE json_formatter::json_formatter(pattern_time_type time_type, std::s
 SPDLOG_INLINE json_formatter& json_formatter::add_default_fields()
 {
     return add_field("time", ISO8601_FLAGS).add_field("level", "%l").
-        add_field("msg", "%v", json_field_type::STRING).add_field("src_loc", "%@");
+        add_field("msg", "%v", json_field_type::STRING).add_field("src_loc", "%s:%#");
 }
 
 SPDLOG_INLINE json_formatter &json_formatter::add_field(std::string field_name, std::string pattern, json_field_type field_type)
@@ -258,7 +258,7 @@ SPDLOG_INLINE json_formatter &json_formatter::add_field(std::string field_name, 
 
 SPDLOG_INLINE std::unique_ptr<formatter> json_formatter::clone() const
 {
-    auto result = details::make_unique<json_formatter>(pattern_time_type_, eol_);
+    auto result = make_unique({}, pattern_time_type_, eol_);
     for (auto &field: fields_) {
         result->fields_.emplace_back(std::move(field->clone()));
     }

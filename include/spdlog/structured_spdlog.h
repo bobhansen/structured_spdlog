@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "spdlog.h"
+#include "spdlog/common.h"
 
 #include <iterator>
 

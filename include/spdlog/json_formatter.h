@@ -63,7 +63,7 @@ public:
     // With user-selected fields
     json_formatter(std::initializer_list<pattern_field_definition> fields, pattern_time_type time_type = pattern_time_type::local, std::string eol = spdlog::details::os::default_eol);
 
-    // Can't pass initializer_list through std::forward calls, including make_unique
+    // Can't pass initializer_list through std::forward calls, including std::make_unique
     static std::unique_ptr<json_formatter> make_unique(std::initializer_list<pattern_field_definition> fields, pattern_time_type time_type = pattern_time_type::local, std::string eol = spdlog::details::os::default_eol)
     {
         return std::unique_ptr<json_formatter>(new json_formatter(fields, time_type, eol));

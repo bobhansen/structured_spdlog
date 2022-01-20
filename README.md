@@ -2,7 +2,101 @@
 
 Very fast, header-only/compiled, C++ logging library. [![Build Status](https://app.travis-ci.com/gabime/spdlog.svg?branch=v1.x)](https://app.travis-ci.com/gabime/spdlog)&nbsp; [![Build status](https://ci.appveyor.com/api/projects/status/d2jnxclg20vd0o50?svg=true&branch=v1.x)](https://ci.appveyor.com/project/gabime/spdlog) [![Release](https://img.shields.io/github/release/gabime/spdlog.svg)](https://github.com/gabime/spdlog/releases/latest)
 
-## Install 
+## Using Structured spdlog
+```c++
+#include "spdlog/structured_spdlog.h"
+#include "spdlog/json_formatter.h"
+
+int main()
+{
+    // Output structured data
+    spdlog::info({{"field1","value1"}, {"field2",2.0}}, "Log fields and values");
+    //-->    [2022-01-19 15:52:03.301] [info] Log fields and values field1:value1 field2:2.000000
+
+    // Set up a json formatter.  Not required, but very useful for parsing logs
+    spdlog::set_formatter(std::make_unique<spdlog::json_formatter>());
+    SPDLOG_INFO({{"field1","value2"}, {"field2",4.0}}, "JSON logging is good for fields");
+    //-->   {"time":"2022-01-19T15:52:03.301814-08:00", "level":"info",
+    //       "msg":"JSON logging is good for fields", "src_loc":"example.cpp:56",
+    //       "field1":"value2", "field2":4.000000}
+
+    // Put current context on the stack and have it included in subsequent log statements
+    {
+        spdlog::context ctx({{"txn_id",12292338}});
+        SPDLOG_INFO("Starting txn");
+        //-->   {"time":..., "msg":"Starting txn", "txn_id":12292338}
+    }
+
+    // Put your favorite pattern fields into the json
+    spdlog::set_formatter(spdlog::json_formatter::make_unique(
+        {{"thread_id","%t",spdlog::json_field_type::NUMERIC}, {"msg","%v"}}));
+    {
+        spdlog::context ctx({{"txn_id",60841}});
+        SPDLOG_INFO("New txn");
+        //-->   {"thread_id":10468, "msg":"New txn", "txn_id":60841}
+    }
+
+    // Carry contexts across your favorite thread pool
+    spdlog::context inner_ctx({{"outer","ctx"}});
+    auto ctx_snapshot=spdlog::snapshot_context_fields();
+    std::thread thread = spdlog::details::make_unique<std::thread>(
+        [ctx_snapshot] {
+        spdlog::context thread_ctx({{"position",1}});
+        spdlog::info("Started a thread");
+        spdlog::replacement_context ctx(ctx_snapshot);  // Replace the existing contexts
+        spdlog::context thread_ctx2({{"superposition",2}});
+        spdlog::info("In a thread");
+    });
+    thread.join();
+    //-->   {"msg":"Started a thread", "position":1}
+    //      {"msg":"In a thread", "superposition":2, "outer":"ctx"}
+
+}
+```
+
+## Structured performance
+(on a 24-CPU Broadwell VM)
+
+Summary:
+* If compiled with -DSPDLOG_NO_STRUCUTRED_SPDLOG=ON, no statistically significant slowdown
+* w/ structured on, ~6% slowdown (independent of depth of stack contexts)
+* w/ json output, ~50% slowdown (definite room for optimizations)
+
+| benchmark | origin/v1.x | structured_v0<br>-DSPDLOG_NO_STRUCUTRED_SPDLOG=ON | structured_v0 |
+|-------------|-------------|----------------|-------------|
+| basic_st |  2.34M/s ± 0.04M/s |  2.25M/s ± 0.05M/s |  2.20M/s ± 0.06M/s |
+| 1x basic_mt | 2.15M/s ± 0.04M/s | 2.09M/s ± 0.04M/s |  2.03M/s ± 0.05M/s |
+| 4x basic_mt | 1.24M/s ± 0.02M/s |  1.24M/s ± 0.02M/s | 1.20M/s ± 0.02M/s |
+| field_st |   |   |  2.28M/s ± 0.04M/s |
+| 1ctx_st  |   |   |  2.25M/s ± 0.04M/s |
+| 10ctx_st |   |   | 2.24M/s ± 0.04M/s |
+| field_json_st |   |   | 1.15M/s ± 0.02M/s |
+
+* All numbers reported with 95% confidence interval over 100 runs
+* Run with ``cmake -DCMAKE_BUILD_TYPE=Release -DSPDLOG_BUILD_BENCH=ON && make -j && for i in {1..100}; do bench/bench > "/tmp/spdlog-`git rev-parse HEAD`-`date +%s`"; done``
+* New benchmarks:
+    * field_st: Implement ``bench_fields`` with ``log->log(spdlog::source_loc{}, spdlog::level::info, {{"msg number",i}}, "Hello logger");``
+    * 1ctx: ``spdlog::context ctx({{"ctx", 1}}); bench_fields(iters, basic_1ctx_st);``
+    * 10ctx: ``spdlog::context ctx1({{"ctx", 1}}); spdlog::context ctx2({{"ctx", 1}}); ...; bench_fields(iters, basic_10ctx_st);``
+    * field_json_st: ``basic_json_st->set_formatter(spdlog::details::make_unique<spdlog::json_formatter>()); bench_fields(iters, basic_json_st);``
+
+## Structured TODOs
+
+* Optimization
+    * Current implementation was written for efficiency, but not optimized yet
+* wchar support
+* Complete the set of convenience functions
+    * e.g. ``spdlog::log(level, fields, msg);
+    * Note that it intentionally doesn't expose Fields + fmt+args; we've found it's generally best to move things to fields whenever you touch the logging
+    * If you really need to you can use ``fmt::format()`` for the message
+* Test on all combinations of builds
+   * Tested on linux, with and without -DSPDLOG_NO_STRUCUTRED_SPDLOG set
+* Custom tags w/ JSON formatter
+* Printing objects to JSON
+* Format specifiers for floats on the stack
+
+
+## Install
 #### Header only version
 Copy the include [folder](https://github.com/gabime/spdlog/tree/v1.x/include/spdlog) to your build tree and use a C++11 compiler.
 
@@ -12,7 +106,7 @@ $ git clone https://github.com/gabime/spdlog.git
 $ cd spdlog && mkdir build && cd build
 $ cmake .. && make -j
 ```
-      
+
    see example [CMakeLists.txt](https://github.com/gabime/spdlog/blob/v1.x/example/CMakeLists.txt) on how to use.
 
 ## Platforms
@@ -53,30 +147,30 @@ $ cmake .. && make -j
 * Log filtering - log levels can be modified in runtime as well as in compile time.
 * Support for loading log levels from argv or from environment var.
 * [Backtrace](#backtrace-support) support - store debug messages in a ring buffer and display later on demand.
- 
+
 ## Usage samples
 
 #### Basic usage
 ```c++
 #include "spdlog/spdlog.h"
 
-int main() 
+int main()
 {
     spdlog::info("Welcome to spdlog!");
     spdlog::error("Some error message with arg: {}", 1);
-    
+
     spdlog::warn("Easy padding in numbers like {:08d}", 12);
     spdlog::critical("Support for int: {0:d};  hex: {0:x};  oct: {0:o}; bin: {0:b}", 42);
     spdlog::info("Support for floats {:03.2f}", 1.23456);
     spdlog::info("Positional args are {1} {0}..", "too", "supported");
     spdlog::info("{:<30}", "left aligned");
-    
+
     spdlog::set_level(spdlog::level::debug); // Set global log level to debug
-    spdlog::debug("This message should be displayed..");    
-    
+    spdlog::debug("This message should be displayed..");
+
     // change log pattern
     spdlog::set_pattern("[%H:%M:%S %z] [%n] [%^---%L---%$] [thread %t] %v");
-    
+
     // Compile time log levels
     // define SPDLOG_ACTIVE_LEVEL to desired level
     SPDLOG_TRACE("Some trace message with param {}", 42);
@@ -92,8 +186,8 @@ int main()
 void stdout_example()
 {
     // create color multi threaded logger
-    auto console = spdlog::stdout_color_mt("console");    
-    auto err_logger = spdlog::stderr_color_mt("stderr");    
+    auto console = spdlog::stdout_color_mt("console");
+    auto err_logger = spdlog::stderr_color_mt("stderr");
     spdlog::get("console")->info("loggers can be retrieved from a global registry using the spdlog::get(logger_name)");
 }
 ```
@@ -104,7 +198,7 @@ void stdout_example()
 #include "spdlog/sinks/basic_file_sink.h"
 void basic_logfile_example()
 {
-    try 
+    try
     {
         auto logger = spdlog::basic_logger_mt("basic_logger", "logs/basic-log.txt");
     }
@@ -175,9 +269,9 @@ spdlog::flush_every(std::chrono::seconds(3));
 #include "spdlog/stopwatch.h"
 void stopwatch_example()
 {
-    spdlog::stopwatch sw;    
+    spdlog::stopwatch sw;
     spdlog::debug("Elapsed {}", sw);
-    spdlog::debug("Elapsed {:.3}", sw);       
+    spdlog::debug("Elapsed {:.3}", sw);
 }
 
 ```
@@ -243,13 +337,13 @@ void async_example()
     // spdlog::init_thread_pool(8192, 1); // queue with 8k items and 1 backing thread.
     auto async_file = spdlog::basic_logger_mt<spdlog::async_factory>("async_file_logger", "logs/async_log.txt");
     // alternatively:
-    // auto async_file = spdlog::create_async<spdlog::sinks::basic_file_sink_mt>("async_file_logger", "logs/async_log.txt");   
+    // auto async_file = spdlog::create_async<spdlog::sinks::basic_file_sink_mt>("async_file_logger", "logs/async_log.txt");
 }
 
 ```
 
 ---
-#### Asynchronous logger with multi sinks  
+#### Asynchronous logger with multi sinks
 ```c++
 #include "spdlog/sinks/stdout_color_sinks.h"
 #include "spdlog/sinks/rotating_file_sink.h"
@@ -264,7 +358,7 @@ void multi_sink_example2()
     spdlog::register_logger(logger);
 }
 ```
- 
+
 ---
 #### User defined types
 ```c++
@@ -289,7 +383,7 @@ void user_defined_example()
 
 ---
 #### User defined flags in the log pattern
-```c++ 
+```c++
 // Log patterns can contain custom flags.
 // the following example will add new flag '%*' - which will be bound to a <my_formatter_flag> instance.
 #include "spdlog/pattern_formatter.h"
@@ -309,7 +403,7 @@ public:
 };
 
 void custom_flags_example()
-{    
+{
     auto formatter = std::make_unique<spdlog::pattern_formatter>();
     formatter->add_flag<my_formatter_flag>('*').set_pattern("[%n] [%*] [%^%l%$] %v");
     spdlog::set_formatter(std::move(formatter));
@@ -330,7 +424,7 @@ void err_handler_example()
 ```
 
 ---
-#### syslog 
+#### syslog
 ```c++
 #include "spdlog/sinks/syslog_sink.h"
 void syslog_example()
@@ -341,7 +435,7 @@ void syslog_example()
 }
 ```
 ---
-#### Android example 
+#### Android example
 ```c++
 #include "spdlog/sinks/android_sink.h"
 void android_example()
@@ -377,7 +471,7 @@ $ ./example
 ---
 #### Log file open/close event handlers
 ```c++
-// You can get callbacks from spdlog before/after log file has been opened or closed. 
+// You can get callbacks from spdlog before/after log file has been opened or closed.
 // This is useful for cleanup procedures or for adding someting the start/end of the log files.
 void file_events_example()
 {
@@ -387,7 +481,7 @@ void file_events_example()
     handlers.after_open = [](spdlog::filename_t filename, std::FILE *fstream) { fputs("After opening\n", fstream); };
     handlers.before_close = [](spdlog::filename_t filename, std::FILE *fstream) { fputs("Before closing\n", fstream); };
     handlers.after_close = [](spdlog::filename_t filename) { spdlog::info("After closing {}", filename); };
-    auto my_logger = spdlog::basic_logger_st("some_logger", "logs/events-sample.txt", true, handlers);        
+    auto my_logger = spdlog::basic_logger_st("some_logger", "logs/events-sample.txt", true, handlers);
 }
 ```
 
@@ -437,16 +531,16 @@ Below are some [benchmarks](https://github.com/gabime/spdlog/blob/v1.x/bench/ben
 [info] Messages     : 1,000,000
 [info] Threads      : 10
 [info] Queue        : 8,192 slots
-[info] Queue memory : 8,192 x 272 = 2,176 KB 
+[info] Queue memory : 8,192 x 272 = 2,176 KB
 [info] -------------------------------------------------
-[info] 
+[info]
 [info] *********************************
 [info] Queue Overflow Policy: block
 [info] *********************************
 [info] Elapsed: 1.70784 secs     585,535/sec
 [info] Elapsed: 1.69805 secs     588,910/sec
 [info] Elapsed: 1.7026 secs      587,337/sec
-[info] 
+[info]
 [info] *********************************
 [info] Queue Overflow Policy: overrun
 [info] *********************************
@@ -462,5 +556,3 @@ Documentation can be found in the [wiki](https://github.com/gabime/spdlog/wiki/1
 ---
 
 Thanks to [JetBrains](https://www.jetbrains.com/?from=spdlog) for donating product licenses to help develop **spdlog** <a href="https://www.jetbrains.com/?from=spdlog"><img src="logos/jetbrains-variant-4.svg" width="94" align="center" /></a>
-
-
