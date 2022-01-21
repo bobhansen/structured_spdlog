@@ -58,7 +58,8 @@ int main()
 (on a 24-CPU Broadwell VM)
 
 Summary:
-* If compiled with -DSPDLOG_NO_STRUCUTRED_SPDLOG=ON, no statistically significant slowdown
+* If compiled with -DSPDLOG_NO_STRUCTURED_SPDLOG=ON, no statistically significant slowdown
+
 * w/ structured on, ~6% slowdown (independent of depth of stack contexts)
 * w/ json output, ~50% slowdown (definite room for optimizations)
 
