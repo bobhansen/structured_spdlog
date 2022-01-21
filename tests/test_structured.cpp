@@ -24,18 +24,31 @@ std::string log_info(std::initializer_list<spdlog::Field> fields, spdlog::string
 
 TEST_CASE("fields", "[structured]")
 {
-    // Can we construct fields of all types with lvalues?
-    F("var", 1);
-    F("var", "val");
-
     // Can we construct fields with rvalues?
-    std::string str1("str");
-    spdlog::F(str1, str1);
+    spdlog::F f_int("var", 1);
+    REQUIRE(f_int.value_type == spdlog::FieldValueType::INT);
 
-    // Can we construct fields with rvalues?
+    spdlog::F f_str_literal("var", "val");
+    REQUIRE(f_str_literal.value_type == spdlog::FieldValueType::STRING_VIEW);
+
+    // Can we construct fields with lvalues?
+    std::string str2("str");
+    spdlog::F(str2, str1);
+    REQUIRE(str1.value_type == spdlog::FieldValueType::STRING_VIEW);
+
+    // Const chars are troublesome; we really, really want the string literals to
+    //   use their compile-time length, and std::strings to use their O(1) run-time
+    //   length.  The const char (&val)[N] and string_view constructors take care of
+    //   those.
+    // If we include a const char * constructor, it will be preferred for string
+    //   literals (unless we can arrange some template magic that works for C++11 and
+    //   above).  String literals will then have an O(n) cost, and that's no good
+    // If we don't include a const char * constructor, the compiler erases const char *
+    //   to void *, which for historical resons binds to bool before anything else.
+    //   So, for now, const char * maps to bool.  :-|
     const char * cstr = "str";
     auto cstr_f = spdlog::F(cstr, cstr);
-    REQUIRE(cstr_f.value_type == spdlog::FieldValueType::INT);
+    REQUIRE(cstr_f.value_type == spdlog::FieldValueType::BOOL);
 }
 
 TEST_CASE("field_logging", "[structured]")

@@ -72,7 +72,6 @@ option(SPDLOG_BUILD_TESTS_HO "Build tests using the header only version" OFF)
 # bench options
 option(SPDLOG_BUILD_BENCH "Build benchmarks (Requires https://github.com/google/benchmark.git to be installed)" OFF)
 option(SPDLOG_GOOGLEBENCHMARK_URL "Url of googlebenchmark git repository" https://github.com/google/benchmark.git)
-# git@github.com:google/benchmark.git
 
 # sanitizer options
 option(SPDLOG_SANITIZE_ADDRESS "Enable address sanitizer in tests" OFF)

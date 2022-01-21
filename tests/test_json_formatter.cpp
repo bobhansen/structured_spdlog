@@ -127,7 +127,8 @@ TEST_CASE("json escaping", "[json_formatter]")
     REQUIRE(to_string(buffer) == "\\\\\\r\\n\\t\\b\\f\\\"");
 
     // Not escaped
-    buffer.resize(256 - 39);
+    constexpr size_t NUM_ESCAPED_CHARS = 39; // 32 that are <= 0x1f, and 7 that are \r, \n, etc.
+    buffer.resize(256 - NUM_ESCAPED_CHARS);
     char *p = &buffer[0];
     for (int c=0; c <= 255; c++) {
         if (c <= 0x1f || c == '"' || c == '\\' || c == '\b' || c == '\f' || c == '\n' || c == '\r' || c == '\t')

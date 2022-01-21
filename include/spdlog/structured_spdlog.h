@@ -26,7 +26,7 @@ SPDLOG_API struct context_iterator
             }
         }
     **/
-    using iterator_catecory = std::forward_iterator_tag;
+    using iterator_category = std::forward_iterator_tag;
     using value_type        = Field;
     using pointer           = const Field*;
     using reference         = const Field&;

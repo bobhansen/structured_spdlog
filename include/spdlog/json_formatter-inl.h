@@ -29,6 +29,7 @@ SPDLOG_CONSTEXPR char hex_digits[] = "0123456789abcdef";
 
 // 5 -> escape to \uXXXXX
 // 1 -> escape to \n, \r or the like
+// 0 -> do not escape
 SPDLOG_CONSTEXPR uint8_t extra_chars_lookup[256] = {
     5, 5, 5, 5, 5, 5, 5, 5, 1, 1, 1, 5, 1, 1, 5, 5, // 0x0x
     5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, // 0x1x
@@ -66,6 +67,11 @@ SPDLOG_INLINE void escape_to_end(spdlog::memory_buf_t &dest, size_t start_offset
    //   We need to actually parse the input as utf-8 codepoints to
    //   know which bytes are consumed in multi-byte utf-8 encodings
    //   See https://datatracker.ietf.org/doc/html/rfc3629
+
+   // The checks are implemented by looking up in the extra_chars table that encodes
+   //   how many extra bytes we need for each character.  0 implies it doesn't
+   //   need to be escaped; 1 means that it's an encoded caracter (\r, \n, and the like),
+   //   and 5 means that it needs to be unicode-escaped (\u0000).
 
    // TODO: widechar support
    static_assert(sizeof(dest[0]) ==1, "Wide chars are not supported by escape_to_end yet");
@@ -143,8 +149,14 @@ SPDLOG_INLINE void escape_to_end(spdlog::memory_buf_t &dest, size_t start_offset
 
 SPDLOG_INLINE bool pattern_needs_escaping(string_view_t pattern)
 {
-    // Look for any % pattern that isn't in our whitelist of known-doesn't-need-escaping patterns
-    // Anything that can only emit printable ASCII is OK.
+    // As a performance boost, we know that there are certain spdlog %.. patterns
+    //   that can only produce non-escaped ASCII.  We can write those values
+    //   straight out to the JSON without needing to check them for illegal characters
+    //
+    // Scan the user-supplied pattern to see if it contains text that needs to be
+    //   escaped, or a pattern that is not in the KNOWN_CLEAN list
+    //   We check for needs-to-be-escaped characters by checking the extra_chars table;
+    //   anything that requires 0 extra chars doesn't need to be escaped.
 
     constexpr char KNOWN_CLEAN_PATTERNS[] = "LtplLaAbBcCYDxmdHIMSefFprRTXzE%#oiuO";
 
@@ -155,7 +167,7 @@ SPDLOG_INLINE bool pattern_needs_escaping(string_view_t pattern)
             i++;
             c = static_cast<uint8_t>(pattern[i]);
 
-            // TODO: make this a binary search
+            // TODO(opt): make this a hash lookup
             bool flag_char_is_clean = false;
             for (auto clean: KNOWN_CLEAN_PATTERNS) {
                 if (clean == c) {
