@@ -138,7 +138,7 @@ TEST_CASE("json escaping", "[json_formatter]")
     spdlog::details::escape_to_end(buffer, 0);
     REQUIRE(to_string(buffer) == before);
 
-    // Skipping alread-esacped parts
+    // Skipping already-escaped parts
     buffer.resize(0);
     memset(&buffer[0], '~', buffer.capacity());
     std::string already_done{"\\\"foo\": \""};

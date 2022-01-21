@@ -85,7 +85,7 @@ namespace details {
 
 
 /**
-    Using cotext to represent the state of the application:
+    Using context to represent the state of the application:
 
     NOTE: it is important that the context variable has a name, or it will go out of scope immediately.
         RIGHT: spdlog::context ctx({{"field",value}});

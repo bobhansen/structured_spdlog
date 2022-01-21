@@ -63,7 +63,8 @@ Summary:
 * w/ structured on, ~6% slowdown (independent of depth of stack contexts)
 * w/ json output, ~50% slowdown (definite room for optimizations)
 
-| benchmark | origin/v1.x | structured_v0<br>-DSPDLOG_NO_STRUCUTRED_SPDLOG=ON | structured_v0 |
+| benchmark | origin/v1.x | structured_v0<br>-DSPDLOG_NO_STRUCTURED_SPDLOG=ON | structured_v0 |
+
 |-------------|-------------|----------------|-------------|
 | basic_st |  2.34M/s ± 0.04M/s |  2.25M/s ± 0.05M/s |  2.20M/s ± 0.06M/s |
 | 1x basic_mt | 2.15M/s ± 0.04M/s | 2.09M/s ± 0.04M/s |  2.03M/s ± 0.05M/s |
@@ -87,11 +88,13 @@ Summary:
     * Current implementation was written for efficiency, but not optimized yet
 * wchar support
 * Complete the set of convenience functions
-    * e.g. ``spdlog::log(level, fields, msg);
+    * e.g. ``spdlog::log(level, fields, msg);``
+
     * Note that it intentionally doesn't expose Fields + fmt+args; we've found it's generally best to move things to fields whenever you touch the logging
     * If you really need to you can use ``fmt::format()`` for the message
 * Test on all combinations of builds
-   * Tested on linux, with and without -DSPDLOG_NO_STRUCUTRED_SPDLOG set
+   * Tested on linux, with and without -DSPDLOG_NO_STRUCTURED_SPDLOG set
+
 * Custom tags w/ JSON formatter
 * Printing objects to JSON
 * Format specifiers for floats on the stack
