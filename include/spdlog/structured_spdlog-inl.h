@@ -118,10 +118,30 @@ SPDLOG_INLINE context::context(std::initializer_list<Field> fields)
         context_to_restore_ = details::threadlocal_context_head();
     }
 }
+
 SPDLOG_INLINE context::~context()
 {
     details::threadlocal_context_head() = context_to_restore_;
 }
+
+SPDLOG_INLINE void context::reset(std::initializer_list<Field> fields)
+{
+    auto parent_ptr = context_to_restore_;
+
+    if (fields.size() > 0) {
+        auto new_context_head = std::make_shared<details::context_data>(parent_ptr, fields.begin(), fields.size());
+        details::threadlocal_context_head() = new_context_head;
+    } else {
+        // Reset current state to the parent of the old state
+        details::threadlocal_context_head() = parent_ptr;
+
+        // Never store a link with zero fields; iterator++ needs to know that when it follows a traversal, it will
+        //    be pointing to context_data with at least one field.
+        // When this goes out of context, just put the same head back
+        context_to_restore_ = parent_ptr;
+    }
+}
+
 
 // context_iterators
 SPDLOG_INLINE context_iterator& context_iterator::operator++()

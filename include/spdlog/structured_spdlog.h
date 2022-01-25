@@ -120,6 +120,11 @@ class SPDLOG_API context final {
 public:
     context(std::initializer_list<Field> fields);
     ~context();
+
+    // Replaces the contents of a context already on the stack with new values.
+    //    Useful for putting at the top of a processing loop to hold the context and
+    //    only reset it when something changes
+    void reset(std::initializer_list<Field> fields);
 private:
     std::shared_ptr<details::context_data> context_to_restore_;
 };
