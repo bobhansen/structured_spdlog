@@ -64,7 +64,6 @@ Summary:
 * w/ json output, ~50% slowdown (definite room for optimizations)
 
 | benchmark | origin/v1.x | structured_v0<br>-DSPDLOG_NO_STRUCTURED_SPDLOG=ON | structured_v0 |
-
 |-------------|-------------|----------------|-------------|
 | basic_st |  2.34M/s ± 0.04M/s |  2.25M/s ± 0.05M/s |  2.20M/s ± 0.06M/s |
 | 1x basic_mt | 2.15M/s ± 0.04M/s | 2.09M/s ± 0.04M/s |  2.03M/s ± 0.05M/s |
