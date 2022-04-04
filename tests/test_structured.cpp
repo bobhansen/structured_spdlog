@@ -32,9 +32,10 @@ TEST_CASE("fields", "[structured]")
     REQUIRE(f_str_literal.value_type == spdlog::FieldValueType::STRING_VIEW);
 
     // Can we construct fields with lvalues?
+    std::string str1("key");
     std::string str2("str");
-    spdlog::F(str2, str1);
-    REQUIRE(str1.value_type == spdlog::FieldValueType::STRING_VIEW);
+    spdlog::F str_f(str1, str2);
+    REQUIRE(str_f.value_type == spdlog::FieldValueType::STRING_VIEW);
 
     // Const chars are troublesome; we really, really want the string literals to
     //   use their compile-time length, and std::strings to use their O(1) run-time
