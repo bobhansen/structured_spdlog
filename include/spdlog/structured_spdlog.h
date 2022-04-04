@@ -129,10 +129,30 @@ private:
     std::shared_ptr<details::context_data> context_to_restore_;
 };
 
+/**
+    replacement_context replaces the current thread's entire context with a snapshot
+    of context from another thread.  Useful when work is being passed via lambdas to
+    threadpools for execution.
+
+    Can also be constructed with additional context for this instance.  For example:
+        spdlog::context ctx({{"outer", "val"}});
+        std::thread th([ctx_snapshot=snapshot_context_fields()] {    // copy the threadlocal context for use in another thread
+            spdlog::replacement_context ctx(ctx_snapshot,
+                {{"thread_id"}, std::this_thread::get_id()}});       // Restore outer context with additional local context
+            spdlog::info({{"function", "in_thread"}});               // prints "outer:val thread_id:169 function:in_thread"
+        });
+        th.join();
+
+**/
 SPDLOG_API details::context_snapshot snapshot_context_fields();
 class SPDLOG_API replacement_context final {
 public:
-    replacement_context(details::context_snapshot data);
+    // Temporarily replace the current thread-local context with a snapshot from another thread
+    replacement_context(details::context_snapshot data) : replacement_context(data, {}) {};
+
+    // Temporarily replace the current thread-local context with a snapshot from another thread
+    //    and additional local context
+    replacement_context(details::context_snapshot data, std::initializer_list<Field> fields);
     ~replacement_context();
 private:
     std::shared_ptr<details::context_data> old_context_fields_;

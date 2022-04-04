@@ -168,10 +168,15 @@ SPDLOG_INLINE details::context_snapshot snapshot_context_fields()
     return details::threadlocal_context_head();
 }
 
-SPDLOG_INLINE replacement_context::replacement_context(details::context_snapshot data) :
+SPDLOG_INLINE replacement_context::replacement_context(details::context_snapshot data, std::initializer_list<Field> fields) :
     old_context_fields_(details::threadlocal_context_head())
 {
-    details::threadlocal_context_head() = data;
+    if (fields.size() == 0) {
+        details::threadlocal_context_head() = data;
+    } else {
+        auto new_context_head = std::make_shared<details::context_data>(data, fields.begin(), fields.size());
+        details::threadlocal_context_head() = new_context_head;
+    }
 }
 
 SPDLOG_INLINE replacement_context::~replacement_context()

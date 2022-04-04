@@ -250,4 +250,24 @@ TEST_CASE("structured snapshots", "[structured]")
 }
 
 
+TEST_CASE("structured snapshots with ctx", "[structured]")
+{
+    std::unique_ptr<std::thread> thread;
+    {
+        spdlog::context inner_ctx({{"c1","1"}});
+        auto ctx_snapshot=spdlog::snapshot_context_fields();
+        thread = spdlog::details::make_unique<std::thread>(
+            [ctx_snapshot] {
+            {
+                spdlog::replacement_context ctx(ctx_snapshot, {{"c2", 2}});
+                REQUIRE(log_info({}, "Hello") == "Hello c2:2 c1:1");
+            }
+            REQUIRE(log_info({}, "Middle") == "Middle");
+        });
+    }
+    thread->join();
+    REQUIRE(log_info({}, "Bye") == "Bye");
+}
+
+
 #endif // SPDLOG_NO_STRUCTURED_SPDLOG
