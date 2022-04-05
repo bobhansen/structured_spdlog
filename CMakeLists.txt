@@ -71,6 +71,7 @@ option(SPDLOG_BUILD_TESTS_HO "Build tests using the header only version" OFF)
 
 # bench options
 option(SPDLOG_BUILD_BENCH "Build benchmarks (Requires https://github.com/google/benchmark.git to be installed)" OFF)
+option(SPDLOG_GOOGLEBENCHMARK_URL "Url of googlebenchmark git repository" https://github.com/google/benchmark.git)
 
 # sanitizer options
 option(SPDLOG_SANITIZE_ADDRESS "Enable address sanitizer in tests" OFF)
@@ -119,6 +120,7 @@ option(
     SPDLOG_NO_ATOMIC_LEVELS
     "prevent spdlog from using of std::atomic log levels (use only if your code never modifies log levels concurrently"
     OFF)
+option(SPDLOG_NO_STRUCTURED_SPDLOG "Turn off structured support for a small speed increase" OFF)
 option(SPDLOG_DISABLE_DEFAULT_LOGGER "Disable default logger creation" OFF)
 
 # clang-tidy
@@ -231,6 +233,7 @@ foreach(
     SPDLOG_NO_THREAD_ID
     SPDLOG_NO_TLS
     SPDLOG_NO_ATOMIC_LEVELS
+    SPDLOG_NO_STRUCTURED_SPDLOG
     SPDLOG_DISABLE_DEFAULT_LOGGER
     SPDLOG_USE_STD_FORMAT)
     if(${SPDLOG_OPTION})

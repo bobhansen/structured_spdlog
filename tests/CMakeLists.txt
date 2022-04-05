@@ -19,6 +19,7 @@ set(SPDLOG_UTESTS_SOURCES
     test_daily_logger.cpp
     test_misc.cpp
     test_eventlog.cpp
+    test_json_formatter.cpp
     test_pattern_formatter.cpp
     test_async.cpp
     test_registry.cpp
@@ -32,6 +33,7 @@ set(SPDLOG_UTESTS_SOURCES
     test_backtrace.cpp
     test_create_dir.cpp
     test_cfg.cpp
+    test_structured.cpp
     test_time_point.cpp
     test_stopwatch.cpp)
 

@@ -8,10 +8,13 @@
 
 namespace spdlog {
 namespace details {
+class context_data;
 struct SPDLOG_API log_msg
 {
     log_msg() = default;
+    log_msg(log_clock::time_point log_time, source_loc loc, string_view_t logger_name, level::level_enum lvl, string_view_t msg, const Field * fields, size_t field_count);
     log_msg(log_clock::time_point log_time, source_loc loc, string_view_t logger_name, level::level_enum lvl, string_view_t msg);
+    log_msg(source_loc loc, string_view_t logger_name, level::level_enum lvl, string_view_t msg, const Field * fields, size_t field_count);
     log_msg(source_loc loc, string_view_t logger_name, level::level_enum lvl, string_view_t msg);
     log_msg(string_view_t logger_name, level::level_enum lvl, string_view_t msg);
     log_msg(const log_msg &other) = default;
@@ -28,6 +31,12 @@ struct SPDLOG_API log_msg
 
     source_loc source;
     string_view_t payload;
+
+#ifndef SPDLOG_NO_STRUCTURED_SPDLOG
+    Field *field_data{nullptr};
+    size_t field_data_count{0};
+    std::shared_ptr<context_data> context_field_data;
+#endif // SPDLOG_NO_STRUCTURED_SPDLOG
 };
 } // namespace details
 } // namespace spdlog

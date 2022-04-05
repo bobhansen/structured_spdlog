@@ -17,10 +17,10 @@ if(NOT benchmark_FOUND)
         message(STATUS "Downloading GoogleBenchmark")
         include(FetchContent)
 
-        # disable tests  
-        set(BENCHMARK_ENABLE_TESTING OFF CACHE INTERNAL "")        
+        # disable tests
+        set(BENCHMARK_ENABLE_TESTING OFF CACHE INTERNAL "")
         # Do not build and run googlebenchmark tests
-        FetchContent_Declare(googlebenchmark GIT_REPOSITORY https://github.com/google/benchmark.git GIT_TAG v1.6.0)
+        FetchContent_Declare(googlebenchmark GIT_REPOSITORY ${SPDLOG_GOOGLEBENCHMARK_URL} GIT_TAG v1.6.0)
         FetchContent_MakeAvailable(googlebenchmark)
     else()
         message(FATAL_ERROR "GoogleBenchmark is missing. Use CMake >= 3.11 or download it")

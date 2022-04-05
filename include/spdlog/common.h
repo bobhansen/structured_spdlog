@@ -15,6 +15,7 @@
 #include <type_traits>
 #include <functional>
 #include <cstdio>
+#include <type_traits>
 
 #ifdef SPDLOG_USE_STD_FORMAT
 #    include <string_view>
@@ -318,6 +319,60 @@ struct file_event_handlers
         , after_close{nullptr}
     {}
 };
+
+// Cover all fundamental types for C++ plus string_view
+//   see https://en.cppreference.com/w/cpp/language/types
+// This would be better handled by a C++14 std::variant type, but we want to stay C++11-compatible
+enum class FieldValueType {
+    STRING_VIEW,
+    SHORT, USHORT, INT, UINT, LONG, ULONG, LONGLONG, ULONGLONG,
+    BOOL,
+    CHAR, UCHAR, WCHAR,
+    FLOAT, DOUBLE, LONGDOUBLE
+};
+
+struct Field {
+    spdlog::string_view_t name;
+    FieldValueType        value_type;
+    union  {
+        string_view_t string_view_;
+        short short_; unsigned short ushort_; int int_; unsigned int uint_;
+        long long_; unsigned long ulong_; long long longlong_; unsigned long long ulonglong_;
+        bool bool_;
+        char char_; unsigned char uchar_; wchar_t wchar_;
+        float float_; double double_; long double longdouble_;
+    };
+    Field(const string_view_t &field_name, FieldValueType field_type) :
+        name(field_name), value_type(field_type) {};
+    Field() : name{}, value_type(FieldValueType::INT), int_(0) {}
+
+    Field(const string_view_t &field_name, string_view_t      val): name(field_name), value_type(FieldValueType::STRING_VIEW), string_view_(val) {}
+    Field(const string_view_t &field_name, short              val): name(field_name), value_type(FieldValueType::SHORT),       short_      (val) {}
+    Field(const string_view_t &field_name, unsigned short     val): name(field_name), value_type(FieldValueType::USHORT),      ushort_     (val) {}
+    Field(const string_view_t &field_name, int                val): name(field_name), value_type(FieldValueType::INT),         int_        (val) {}
+    Field(const string_view_t &field_name, unsigned int       val): name(field_name), value_type(FieldValueType::UINT),        uint_       (val) {}
+    Field(const string_view_t &field_name, long               val): name(field_name), value_type(FieldValueType::LONG),        long_       (val) {}
+    Field(const string_view_t &field_name, unsigned long      val): name(field_name), value_type(FieldValueType::ULONG),       ulong_      (val) {}
+    Field(const string_view_t &field_name, long long          val): name(field_name), value_type(FieldValueType::LONGLONG),    longlong_   (val) {}
+    Field(const string_view_t &field_name, unsigned long long val): name(field_name), value_type(FieldValueType::ULONGLONG),   ulonglong_  (val) {}
+    Field(const string_view_t &field_name, bool               val): name(field_name), value_type(FieldValueType::BOOL),        bool_       (val) {}
+    Field(const string_view_t &field_name, char               val): name(field_name), value_type(FieldValueType::CHAR),        char_       (val) {}
+    Field(const string_view_t &field_name, unsigned char      val): name(field_name), value_type(FieldValueType::UCHAR),       uchar_      (val) {}
+    Field(const string_view_t &field_name, wchar_t            val): name(field_name), value_type(FieldValueType::WCHAR),       wchar_      (val) {}
+    Field(const string_view_t &field_name, float              val): name(field_name), value_type(FieldValueType::FLOAT),       float_      (val) {}
+    Field(const string_view_t &field_name, double             val): name(field_name), value_type(FieldValueType::DOUBLE),      double_     (val) {}
+    Field(const string_view_t &field_name, long double        val): name(field_name), value_type(FieldValueType::LONGDOUBLE),  longdouble_ (val) {}
+
+    // Catch static strings so they don't get converted to bools
+    template <size_t N>
+    Field(const string_view_t &field_name, const char (&val)[N]): name(field_name), value_type(FieldValueType::STRING_VIEW), string_view_{val, N-1} {}
+};
+using F=Field;
+
+namespace details {
+    class context_data;
+    SPDLOG_API std::shared_ptr<context_data>& threadlocal_context_head();
+}
 
 namespace details {
 // make_unique support for pre c++14
