@@ -266,6 +266,49 @@ public:
     }
 #endif
 
+#ifndef SPDLOG_NO_STRUCTURED_SPDLOG
+    void log(level::level_enum lvl, std::initializer_list<Field> fields, string_view_t msg)
+    {
+        log(source_loc{}, lvl, fields, msg);
+    }
+
+    template<typename T>
+    void trace(std::initializer_list<Field> fields, const T &msg)
+    {
+        log(level::trace, fields, msg);
+    }
+
+    template<typename T>
+    void debug(std::initializer_list<Field> fields, const T &msg)
+    {
+        log(level::debug, fields, msg);
+    }
+
+    template<typename T>
+    void info(std::initializer_list<Field> fields, const T &msg)
+    {
+        log(level::info, fields, msg);
+    }
+
+    template<typename T>
+    void warn(std::initializer_list<Field> fields, const T &msg)
+    {
+        log(level::warn, fields, msg);
+    }
+
+    template<typename T>
+    void error(std::initializer_list<Field> fields, const T &msg)
+    {
+        log(level::err, fields, msg);
+    }
+
+    template<typename T>
+    void critical(std::initializer_list<Field> fields, const T &msg)
+    {
+        log(level::critical, fields, msg);
+    }
+#endif
+
     template<typename T>
     void trace(const T &msg)
     {

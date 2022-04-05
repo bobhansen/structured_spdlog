@@ -59,6 +59,10 @@ TEST_CASE("field_logging", "[structured]")
 
     // Some fields
     REQUIRE(log_info({F("k", 1)}, "Hello") == "Hello k:1");
+
+    // Test level calls
+    spdlog::info({{"field", 1}}, "Hello");
+    spdlog::default_logger()->info({{"field", 2}}, "Hello");
 }
 
 template<typename T>
