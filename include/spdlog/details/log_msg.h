@@ -8,7 +8,7 @@
 
 namespace spdlog {
 namespace details {
-class context_data;
+struct context_data;
 struct SPDLOG_API log_msg
 {
     log_msg() = default;
